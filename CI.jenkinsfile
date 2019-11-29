@@ -147,7 +147,11 @@ node() {
 			stage('Test') {
 				println "Test stage..."
 			}
-		}	
+		}
+		} catch (Exception e) {
+            println 'Job failed'            
+            throw (e)
+        }
     }   //timestamps
 }   //executor
 
