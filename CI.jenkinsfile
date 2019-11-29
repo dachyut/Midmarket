@@ -66,7 +66,7 @@ String buildLevel = 'CI'
 Boolean skipBuild = false
 
 // Skip components list
-String skipComponents = ''
+String skipComponents = 'SKIP_CLIENT, SKIP_MAC_CLIENT, SKIP_PASSPHRASE_CLIENT, SKIP_CLIENT_OBFUSCATION, SKIP_LDAP_SYNC, SKIP_QUICK_CACHE, SKIP_RESET_SERVER, SKIP_SQL_EXPRESS, SKIP_SIGNING, SKIP_SERVER_OBFUSCATION, SKIP_TOOLS, SKIP_AZURE, SKIP_PRECOMPILED_HELP'
 String clientDownloadLocation = ''
 // Default number of vault deploys to 1 for parallelization
 def numOfDeploys = 1
