@@ -46,9 +46,7 @@ properties([
                 description: 'If true, run against an Azure Vault.')
     ]),
     buildDiscarder(logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '', daysToKeepStr: '', numToKeepStr: '30')),
-    pipelineTriggers([githubPush()]),
-    [$class: 'WebhookJobProperty', webhooks: [generateCEBWebhook (branchName),
-                                              generateBB8Webhook (branchName)] ]
+    pipelineTriggers([githubPush()])    
 ])
 
 
