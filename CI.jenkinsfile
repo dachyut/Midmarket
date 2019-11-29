@@ -147,6 +147,7 @@ node() {
 			stage('Test') {
 				println "Test stage..."
 			}
+		}	
     }   //timestamps
 }   //executor
 
