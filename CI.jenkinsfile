@@ -148,7 +148,7 @@ node() {
 				println "Test stage..."
 			}
 		}
-		} catch (Exception e) {
+		catch (Exception e) {
             println 'Job failed'            
             throw (e)
         }
