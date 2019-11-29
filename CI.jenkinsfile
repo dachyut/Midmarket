@@ -75,7 +75,7 @@ def numOfDeploys = 1
 String lastSuccessfulBuildBranch = ''
 
 // Pipeline
-node() {
+node('CEB-NewBuild') {
     timestamps {
         try {
             dir ('tmp') {
