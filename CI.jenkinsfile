@@ -1,0 +1,531 @@
+#!groovy
+import java.lang.String
+
+/****************************
+    Jenkinsfile script to define a CI/PR build pipeline.
+    This is triggered by merges and pull request so needs to be relatively fast,
+    build-->deploy vault--> test automation
+*****************************/
+
+// Multi-Branch plugin passes BRANCH_NAME but Pipeline job plugin does not, so fall back to the job base name
+String branchName = env.BRANCH_NAME ?: env.JOB_BASE_NAME
+String commitHash = ''
+String changeBranch= env.CHANGE_BRANCH
+String pipelineJobName = env.JOB_NAME
+
+// job properties including parameters and triggers
+properties([
+    parameters([
+            string (name: 'BUILD_TYPE', defaultValue: 'FAST',
+                choices: 'FAST\nNIGHTLY\nVAULTBRANDING\nINTERNAL',
+                description: "Specify the type of build, where 'NIGHTLY' is a full branded build with all tools and you usually want 'FAST'."),
+            string (name: 'TFSBUILDTYPE', defaultValue: 'NightlyLite',
+                choices: 'NightlyLite\nNightlyFull',
+                description: "Deprecated build type, 'NightlyLite' goes with BUILD_TYPE FAST and 'NightlyFull' goes with BUILD_TYPE NIGHTLY."),
+            string(name: 'LOG_LEVEL_OPTIONS', defaultValue: 'debug',
+                choices: 'trace\ndebug\ninfo\nwarning\nerror\ncritical',
+                description: 'Amount of verbose-ness to print to the log file. Options include "debug", "info", and "error".'),
+            string (name: 'BUILD_LABEL', defaultValue: 'CEB-NewBuild',
+                description: "Builds will run on this Jenkins label."),
+            string (name: 'BUILD_BRAND_INDEX', defaultValue: '0',
+                description: "If not blank, the index [0-23] of the one brand you want to build. Only used in non-NIGHTLY builds."),
+            string (name: 'TEST_PLATFORM', defaultValue: 'CEB-Client-Automation-Win10-UI',
+                description: 'Tests will run in parallel across this comma-delimited list of Jenkins labels.'),
+            string (name: 'SMOKE_SUITE', defaultValue: 'suites/CI/smoke.suite'),
+            string (name: 'ACCEPTANCE_SUITE', defaultValue: 'suites/CI/feature_acceptance/' + changeBranch + '.suite'),
+            string (name: 'SYSTEM_SUITE', defaultValue: 'suites/CI/system.suite'),
+            booleanParam (name: 'COLLECT_TIMING_DATA', defaultValue: false,
+                description: 'If true, collect historical timing data to analyze bottlenecks.'),
+            booleanParam (name: 'PUSH_ARTIFACTS_TO_AZURE', defaultValue: false,
+                description: 'If true, push build artifacts to azure.'),           
+            booleanParam (name: 'ARCHIVE_TEST_RESULTS', defaultValue: true,
+                description: 'If true, archive the tests results in the automation portal.'),
+            string (name: 'CLIENT_DOWNLOAD_LOCATION', defaultValue: '',
+                description: 'Specify the CLIENT_DOWNLOAD_LOCATION path in feature acceptance suite file if you skip the client build'),
+            booleanParam (name: 'AZURE_VAULT_FLAG', defaultValue: false,
+                description: 'If true, run against an Azure Vault.')
+    ]),
+    buildDiscarder(logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '', daysToKeepStr: '', numToKeepStr: '30')),
+    pipelineTriggers([githubPush()]),
+    [$class: 'WebhookJobProperty', webhooks: [generateCEBWebhook (branchName),
+                                              generateBB8Webhook (branchName)] ]
+])
+
+
+// Sub-jobs to build
+final String targetBranch = env.CHANGE_TARGET
+
+// Properties files to pass parameters from one job to another
+final String BuildPropertiesFile = 'build.properties'
+
+// Record the last committer, for ownership of a broken build
+String lastCommitter = 'The last committer'
+// Tag the build artifacts to guide persistence/cleanup activities
+// Default to 'CI' unless 'PR'
+String buildLevel = 'CI'
+// Can we skip the product build in an automation-only PR?
+// Default to false until we decide otherwise.
+Boolean skipBuild = false
+
+// Skip components list
+String skipComponents = ''
+String clientDownloadLocation = ''
+// Default number of vault deploys to 1 for parallelization
+def numOfDeploys = 1
+
+// Last successful build branch
+String lastSuccessfulBuildBranch = ''
+
+// Pipeline
+node() {
+    timestamps {
+        try {
+            dir ('tmp') {
+                checkout scm
+                lastCommitter = getLastCommitter()
+
+                // If this is a pull request, use the commit hash as the branch name to sub-jobs
+                // plus decide if this is an automation-only PR that can skip the product build
+                if (branchName.startsWith('PR-')) {
+                    // Verify the feature acceptance suite is included in the PR, fail otherwise
+                    String feature_acceptance_suite = 'automation/' + params.ACCEPTANCE_SUITE
+                    def exists = fileExists (feature_acceptance_suite)
+                    if (exists) {
+                        echo 'Feature acceptance file exists.'
+                    } else {
+                        error('Feature acceptance file ' + feature_acceptance_suite + ' DOES NOT exist, failing build.')
+                    }
+                    
+                    if (isOnlyAutomation(changedFiles)) {
+                        println "Trying to get lastSuccessfulBuild of target/base branch: ${targetBranch}"
+                        skipBuild = getLastSuccessfulBuild(targetBranch,BuildPropertiesFile,skipComponents)
+                        lastSuccessfulBuildBranch = targetBranch
+                    }
+                    // If already PR build is available then try to get artifacts from last successful build of PR
+                    if (!skipBuild) {
+                        println "Trying to get lastSuccessfulBuild of current PR branch: ${branchName}"
+                        skipBuild = getLastSuccessfulBuild(branchName,BuildPropertiesFile,skipComponents)
+                        lastSuccessfulBuildBranch = branchName
+                    }
+                    // If no successfull PR builds found, try to get artifacts from last successful build of PR's source branch
+                    if(!skipBuild) {
+                        println "Trying to get lastSuccessfulBuild of source branch of PR: ${changeBranch}"
+                        skipBuild = getLastSuccessfulBuild(changeBranch,BuildPropertiesFile,skipComponents)
+                        lastSuccessfulBuildBranch = changeBranch
+                    }
+                    if (!skipBuild) {
+                        println "This PR requires a product build."
+                    }
+                    commitHash = getCommitHash('HEAD')
+                    buildLevel = 'PR'
+                }
+
+                // Keep build scripts available after cleaning up the git data
+                sh 'cp -rp jenkins ..'
+                deleteDir()
+            }
+
+            stage('Build') {
+                final String BuildLog = 'Build.log'
+                final String BuildFailure = 'Failure.txt'
+                final String BuildTimes = 'build_times.log'
+
+                if (skipBuild && fileExists(BuildPropertiesFile)) {
+                    println "Using lastSuccessfulBuild of ${lastSuccessfulBuildBranch}"
+                    archiveArtifacts artifacts:  BuildPropertiesFile, fingerprint: true
+                } else {
+                    String myCode = commitHash ?: branchName
+                    def build = load 'jenkins/build.groovy'
+                    build.exec(myCode, params.BUILD_TYPE, buildLevel, params.BUILD_LABEL, params.PUSH_ARTIFACTS_TO_AZURE, skipComponents, clientDownloadLocation)
+                }
+                sh "cat ${BuildPropertiesFile}"
+            }
+			stage('Deploy') {
+				println "Deploy stage...."
+			}
+			
+			stage('Test') {
+				println "Test stage..."
+			}
+    }   //timestamps
+}   //executor
+
+
+/***********************
+ Function to execute automation stages
+ ***********************/
+def runAutomationStages (commitHash, buildLevel, branchName, pipelineJobName, params, lockedPrivateCloudVaultVms) {
+    stage('Smoke Test') {
+        def automation = load 'jenkins/automation.groovy'
+        automation.exec(params.ARCHIVE_TEST_RESULTS, commitHash, params.TEST_PLATFORM, params.SMOKE_SUITE, 'Smoke', buildLevel, false, params.LOG_LEVEL_OPTIONS, lockedPrivateCloudVaultVms, pipelineJobName, params.AZURE_VAULT_FLAG)
+    }
+
+    if (branchName.startsWith('PR-')){
+        stage('Feature Acceptance Test') {
+            def automation = load 'jenkins/automation.groovy'
+            automation.exec(params.ARCHIVE_TEST_RESULTS, commitHash, params.TEST_PLATFORM, params.ACCEPTANCE_SUITE, 'Feature Acceptance', buildLevel, false, params.LOG_LEVEL_OPTIONS, lockedPrivateCloudVaultVms, pipelineJobName, params.AZURE_VAULT_FLAG)
+        }
+    } else {
+        stage('System Test') {
+            def automation = load 'jenkins/automation.groovy'
+            automation.exec(params.ARCHIVE_TEST_RESULTS, commitHash, params.TEST_PLATFORM, params.SYSTEM_SUITE, 'System', buildLevel, false, params.LOG_LEVEL_OPTIONS, lockedPrivateCloudVaultVms, pipelineJobName, params.AZURE_VAULT_FLAG)
+        }
+    }
+}
+
+
+/***********************
+ Utility function to get the git commit hash
+ represented by a branch name or 'HEAD'.
+ ASSUMES: current directory is a git project
+ ************************/
+def getCommitHash (branchName) {
+    sh "git rev-parse ${branchName} >.git/commit_id"
+    String myCommit = readFile('.git/commit_id').replaceAll('\\W', '')
+    return myCommit
+}
+
+
+/***********************
+ Utility function to find the last committer for the current HEAD.
+ If notifications are triggered and Jenkins can not find a culprit, use this
+ ASSUMES: current directory is a git project
+ ************************/
+def getLastCommitter () {
+    sh "git log -1 --format='%ae' >.git/last_committer"
+    String lastCommitter = readFile('.git/last_committer').replaceAll('\\s', '')
+    return lastCommitter
+}
+
+
+/***********************
+    Utility function to get a list of files changed between two git commits
+    represented as a hash, branch, or 'HEAD'.
+    ASSUMES: current directory is a git project
+************************/
+def getChangedFiles (firstCommit, secondCommit) {
+    final String changedFilesList = '.git/changed_files.txt'
+    def myStatus = sh(returnStatus: true, script: "git diff --name-only ${firstCommit} ${secondCommit} > ${changedFilesList}")
+    if (myStatus != 0) {
+        println "Git failed getting the list of changed files."
+        return null
+    }
+    sh "wc -l ${changedFilesList}"
+    sh "cat ${changedFilesList}"
+    return readFile(changedFilesList).split("\n")
+}
+
+
+/***********************
+    Utility function to determine whether a PR is automation only.
+    Given a list of files changed in this PR,
+    do any of them require a product build?
+************************/
+Boolean isOnlyAutomation(changedFiles) {
+
+    // If you can't determine, then the safest approach is to say no
+    if (!changedFiles) {
+        println "Warning: No list of changed files."
+        return false
+    }
+
+    for (int ii = 0; ii < changedFiles.size(); ii++) {
+        if (false == changedFiles[ii].startsWith("automation")) {
+            println "Found diffs with non-automation file <${changedFiles[ii]}>."
+            return false
+        }
+    }
+
+    for (int ii = 0; ii < changedFiles.size(); ii++) {
+        if (changedFiles[ii].toLowerCase().contains('jenkins')) {
+            println "Found diffs with build script <${changedFiles[ii]}>."
+            return false
+        }
+    }
+
+    return true
+}
+
+
+/***********************
+    Utility function to determine whether we can use an existing last successful build
+    Given the target branch for this PR,
+    does the 'lastSuccessfulBuild' (green or yellow) either have the current HEAD
+    or are there only automation changes?
+************************/
+Boolean getLastSuccessfulBuild(branchName,buildPropertiesFile,skipComponents) {
+    final String commitKey = 'COMMIT'
+    final String artifactKey = 'DOWNLOAD_URL'
+    final String targetJob = 'EndpointMidmarket/CI/' + branchName
+    final String skipComponentsString = 'SKIP_COMPONENTS'
+
+    // Try to find and copy artifacts from Last successful build of branchName that has been passed
+    try {
+        step([$class: 'CopyArtifact',
+            filter: "${buildPropertiesFile}",
+            fingerprintArtifacts: true,
+            flatten: true,
+            selector: lastSuccessful(),
+            projectName: targetJob])
+    } catch (Exception e) {
+        println "Could not find last successful build properties for job:  ${targetJob}"
+        println e
+        return false
+    }
+
+    def buildProps = readProperties file:buildPropertiesFile
+    if (!buildProps.containsKey(commitKey)) {
+        println "Could not find what commit was used in the last successful build of target job ${targetJob}."
+        return false
+    }
+
+    // Verify existence of the artifacts download location
+    if (!buildProps.containsKey(artifactKey)) {
+        println "Could not find the artifacts location for the last successful build of target job ${targetJob}."
+        return false
+    }
+    String artifactsCmd = 'curl --head --fail ' + buildProps[artifactKey]
+    def myStatus = sh(returnStatus: true, script: artifactsCmd)
+    if (myStatus != 0) {
+        println "Artifacts location does not exist or is unreachable for the last successful build of target job ${targetJob}: ${buildProps[artifactKey]}"
+        return false
+    }
+
+    // Verify if current changes are only automation changes or product changes when compared to last successful build
+    String currentCommit = "origin/${branchName}"    
+    if (buildProps[commitKey] == getCommitHash(currentCommit)) {
+        println "The last successful build ${targetJob} is up to date."
+    } else {
+        String[] changedFiles = getChangedFiles(buildProps[commitKey], currentCommit)
+        if (!isOnlyAutomation(changedFiles)) {
+            println "Current branch ${branchName} has non-automation commits that are not included in the last successful build of ${targetJob}."            
+            return false
+        }
+    }
+
+    // Verify existence of the skipComponentsString property from last successful build
+    if (!buildProps.containsKey(skipComponentsString)) {
+        println "Could not find the $skipComponentsString property for the last successful build of target job ${targetJob}."
+        return false
+    }
+   
+    // Verify if skip component flag is changed in the current commit when compared to last successful build
+    skipComponentsFromLastSuccessfulBuild = buildProps[skipComponentsString]
+    def lsbSkipComponentsList = skipComponentsFromLastSuccessfulBuild.split(',').collect{it.trim() as String}
+    def currentSkipComponentsList = skipComponents.split(',').collect{it.trim() as String}
+    // Compare both list for any changes
+    def match = lsbSkipComponentsList.sort().equals(currentSkipComponentsList.sort())
+    if(!match) {
+        println "Found Skip component flag for one or more switches are changed in the suite file when compared to last successful build properties"
+        return false
+    }
+
+    sh "mv ${buildPropertiesFile} ${env.WORKSPACE}"
+    return true
+}
+
+
+/**********************************
+    Decide whether a branch is important.
+    Used to determine whether to send notifications.
+**********************************/
+boolean isImportant (String branchName) {
+    final String [] importantBranches = ['master', 'develop', 'client-ui' ]
+    boolean itIs = (branchName in importantBranches || branchName.matches("v\\d+\\.\\d+(.*)") )
+
+    // Uncomment to disable notifications - nothing is important
+    // itIs = false
+    // Uncomment for testing - everything is important
+    // itIs = true
+
+    if (itIs) println branchName + ' is an important branch.'
+    return itIs
+}
+
+
+/**********************************
+    Decide whether a branch is important to Team BB8
+    Used to determine whether to send notifications.
+**********************************/
+boolean isImportantToBB8 (String branchName) {
+    final String [] importantBranches = ['client-ui']
+    boolean itIs = (branchName in importantBranches)
+
+    // Uncomment to disable notifications - nothing is important
+    // itIs = false
+    // Uncomment for team branches to notify the team for all - everything is important
+    // itIs = true
+
+    if (itIs) println branchName + ' is an important branch to Team BB8.'
+    return itIs
+}
+
+
+/**********************************
+    Send an email notifying CEB about the build status.
+**********************************/
+def emailCEB (String branchName, String lastCommitter, String exceptionMessage) {
+    final String buildStatusChannel = 'https://teams.microsoft.com/l/channel/19%3aa119fc1f894e45f391c25ba5849cffec%40thread.skype/Build%2520Status?groupId=082b8885-a423-4058-9bbc-65f73c7897e5&tenantId=4f0566c5-7c80-40a4-b3e8-7cfcb6c423ff'
+    if (isImportant(branchName)) {
+        String distributionList = 'cc:MidMarketEndpointLeads@carbonite.com, cc:DPasto@Carbonite.com, cc:sharrington@carbonite.com, FPerry@carbonite.com'
+        if (env.CHANGE_AUTHOR_EMAIL) distributionList += ", ${env.CHANGE_AUTHOR_EMAIL}"
+
+        String blame = '\n'
+        if (exceptionMessage) blame += "\n<p><code>${exceptionMessage}</code></p>\n\n"
+        if (env.CHANGE_AUTHOR_EMAIL) blame += "Committer:  ${env.CHANGE_AUTHOR_EMAIL}\n"
+        if (env.CHANGE_TITLE) blame += "Change:  ${env.CHANGE_TITLE}\n"
+        if (env.CHANGE_URL) blame += "\t${env.CHANGE_URL}\n"
+
+        def culprit = ''
+        def recipients = ''
+        recipients = emailextrecipients([[$class: 'FirstFailingBuildSuspectsRecipientProvider']])
+        println "First failling build suspect <${recipients}>"
+        culprit = culprit ?: recipients
+        recipients = emailextrecipients([[$class: 'CulpritsRecipientProvider']])
+        println "Possible culprits <${recipients}>"
+        culprit = culprit ?: recipients
+        recipients = emailextrecipients([[$class: 'RequesterRecipientProvider']])
+        println "Build Requestor <${recipients}>"
+        culprit = culprit ?: recipients
+        println "Last Committer <${lastCommitter}>"
+        if (!culprit) {
+            culprit = lastCommitter
+            distributionList += ", ${lastCommitter}"
+        }
+        culprit = culprit ?: 'The last committer'
+
+        emailext attachLog: false,
+                to: distributionList,
+                recipientProviders: [[$class: 'CulpritsRecipientProvider'],
+                                     [$class: 'FirstFailingBuildSuspectsRecipientProvider'],
+                                     [$class: 'UpstreamComitterRecipientProvider'],
+                                     [$class: 'RequesterRecipientProvider'] ],
+                mimeType: 'text/html',
+                subject: "${branchName} Build is Broken",
+                body: """
+<h2>[${env.JOB_NAME}#${BUILD_NUMBER}] is broken</h2>
+<blockquote>See Jenkins <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></blockquote>
+
+<p><font size="+2" color="red">${culprit}</font>
+   <font size="+1">is responsible for fixing or identifying a new owner.</font></p>
+<p><font color="red">Please reply to Teams thread in <a href="${buildStatusChannel}">CEB - Development / Build Status</a>
+with status within an hour.</font></p>
+""" + blame
+    }
+}
+
+
+/**********************************
+    Generate a webhook data structure for notifying CEB
+    in Microsoft Teams about the build status.
+    Usage, in the build properties:
+        [$class: 'WebhookJobProperty', webhooks: generateCEBWebhook (branchName)]
+**********************************/
+def generateCEBWebhook (String branchName) {
+    final String cebWebhookURL = 'https://outlook.office.com/webhook/082b8885-a423-4058-9bbc-65f73c7897e5@4f0566c5-7c80-40a4-b3e8-7cfcb6c423ff/JenkinsCI/6a16d1c2ff404851a516c17bc99a0ab5/8bc72d8b-5ea8-43e9-955e-e7692bb1825c';
+    boolean notifyCeb = isImportant(branchName)
+
+    // Uncomment to disable notifications
+    // notifyCeb = false
+
+    if (notifyCeb) println 'Will notify CEB in Teams for build failures.'
+    return ([notifyAborted: false,
+            notifyBackToNormal: notifyCeb,
+            notifyFailure: notifyCeb,
+            notifyNotBuilt: false,
+            notifyRepeatedFailure: notifyCeb,
+            notifySuccess: false,
+            notifyUnstable: notifyCeb,
+            startNotification: false,
+            timeout: 30000,
+            url: cebWebhookURL])
+}
+
+
+/**********************************
+    Generate a webhook data structure for notifying Team BB-8
+    in Microsoft Teams about the build status.
+    Usage, in the build properties:
+        [$class: 'WebhookJobProperty', webhooks: generateBB8Webhook (branchName)]
+**********************************/
+def generateBB8Webhook (String branchName) {
+    final String bb8WebhookURL = 'https://outlook.office.com/webhook/fcb968cb-770a-4fc7-b2f6-aca4c35f0331@4f0566c5-7c80-40a4-b3e8-7cfcb6c423ff/JenkinsCI/f33d002846444420a0a5a1691b57ec01/7a4c2132-6f60-4569-9774-c58420667266'
+    boolean notifyBB8 = isImportantToBB8(branchName)
+
+    // Uncomment to disable notifications
+    // notifyBB8 = false
+    // Uncomment in team branches to always notify the team
+    // notifyBB8 = true
+
+    if (notifyBB8) println 'Will notify BB8 in Teams for build failures.'
+    return ([notifyAborted: false,
+            notifyBackToNormal: notifyBB8,
+            notifyFailure: notifyBB8,
+            notifyNotBuilt: false,
+            notifyRepeatedFailure: false,
+            notifySuccess: notifyBB8,
+            notifyUnstable: false,
+            startNotification: false,
+            timeout: 30000,
+            url: bb8WebhookURL])
+}
+
+/*********************************
+    Parse Suite file and extract build switches
+    Read suite file and find all lines containing '=' sign
+    Create a map with key value pair containing Build switch name and its flag (True or False)
+**********************************/
+def getBuildSwitchesFromSuiteFile (String feature_acceptance_suite) {
+    // Read suite file as string
+	String suiteFile = readFile(feature_acceptance_suite)
+    // split lines
+    buildSwitches = (((suiteFile.split('\n')
+            // remove blank lines
+            .findAll { item -> !item.isEmpty() })
+            // find line contains '='
+            .findAll { it.contains('=') })
+            // collections of switches
+            .collectEntries{ [(it.split("=")[0].trim()): it.split("=")[1].trim()] })
+    return buildSwitches
+}
+
+/*********************************
+    Get SKIP build switches from Suite file
+    Generate skip components from suite file
+    Returns all switches whose flag is set to TRUE
+**********************************/
+def generateSkipComponentsList (skipComponentsList) {    
+    if (!skipComponentsList.isEmpty()) {
+        s = skipComponentsList.toString()
+        // Get string between '[' and ']'
+        println("Skip components list: ${s.substring(s.indexOf("[") + 1, s.indexOf("]"))}")
+        return s.substring(s.indexOf("[") + 1, s.indexOf("]"))
+    }	
+    return ''
+}
+
+/*********************************
+    Get Client Build Location path from Suite file
+**********************************/
+def getClientBuildLocationPathFromSuiteFile (String feature_acceptance_suite) {
+    componentsList = getBuildSwitchesFromSuiteFile(feature_acceptance_suite)
+
+    if (componentsList.size() > 0 && componentsList['SKIP_CLIENT'] == 'TRUE') {
+        if(componentsList['SKIP_MAC_CLIENT'] != 'TRUE') {
+            error("If you set SKIP_CLIENT flag to TRUE then you should also set SKIP_MAC_CLIENT flag to TRUE")
+        }
+        if(!componentsList['CLIENT_DOWNLOAD_LOCATION']) {
+            error('CLIENT_DOWNLOAD_LOCATION path should be set in suite file if SKIP_CLIENT flag is true')
+        }
+        println ("SKIP_CLIENT flag is set to TRUE")
+        // Checking client download URL is reachable or not
+        try {
+            sh "curl -s --head  --request GET ${componentsList['CLIENT_DOWNLOAD_LOCATION']} | grep '200'"
+            return componentsList['CLIENT_DOWNLOAD_LOCATION']
+        } catch (Exception e) {
+            error ("Client download URL is not reachable ${componentsList['CLIENT_DOWNLOAD_LOCATION']}")
+        }
+    }	
+    println ("SKIP_CLIENT flag is set to FALSE")
+    return ''
+}
