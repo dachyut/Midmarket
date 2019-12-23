@@ -1,0 +1,1521 @@
+<?xml version='1.0' encoding='utf-8'?>
+<project version='9' encrypted='1'>
+	<steps type='0'>
+		<step action='Group'>
+			<name>Project steps</name>
+		</step>
+		<step action='Subroutine Call'>
+			<Expand type='11'>-1</Expand>
+			<ParamValues array='0'>StartBuild</ParamValues>
+			<Parameters array='0'>BUILD_STAGE</Parameters>
+			<SubName>Log Major Build Stage</SubName>
+			<indent type='3'>1</indent>
+			<name>Log Major Build Stage - Start</name>
+		</step>
+		<step action='Group'>
+			<indent type='3'>1</indent>
+			<name>INITIALISE</name>
+		</step>
+		<step action='Log Message'>
+			<Message>Build Type has been set to %BUILD_TYPE%</Message>
+			<buildfailsteps type='11'>0</buildfailsteps>
+			<condcomparison type='3'>1</condcomparison>
+			<condexpr>%BUILD_TYPE%</condexpr>
+			<continueonfail type='3'>1</continueonfail>
+			<indent type='3'>2</indent>
+			<name>Echo Build Type Message</name>
+		</step>
+		<step action='Set Macro'>
+			<MacroName>ClientSxSOverrideLoopCount</MacroName>
+			<MacroValue>0</MacroValue>
+			<condcompareto>true</condcompareto>
+			<condexpr>%FastBuildSwitches%</condexpr>
+			<indent type='3'>2</indent>
+			<name>Set default ClientSxSOverrideLoopCount to 0</name>
+		</step>
+		<step action='Set Macro'>
+			<MacroEnvVar type='11'>-1</MacroEnvVar>
+			<MacroName>__COMPAT_LAYER</MacroName>
+			<MacroValue>DisableNXShowUI RunAsAdmin</MacroValue>
+			<description><![CDATA[We must override this variable in Visual Build Pro v6.
+If we don't, the GUI fails to build the Wix installer with stdafx.cpp compiler errors.]]></description>
+			<indent type='3'>2</indent>
+			<name>Override __COMPAT_LAYER macro</name>
+		</step>
+		<step action='Set Macro'>
+			<MacroName>DoIncludeDebugBinariesPDBs</MacroName>
+			<MacroValue>true</MacroValue>
+			<condcompareto>NIGHTLY</condcompareto>
+			<condcomparison type='3'>3</condcomparison>
+			<condexpr>%BUILD_TYPE%</condexpr>
+			<indent type='3'>2</indent>
+			<name>Always set DoIncludeDebugBinariesPDBs if nightly build</name>
+		</step>
+		<step action='Set Macro'>
+			<MacroName>BuildSqlProj</MacroName>
+			<MacroValue>false</MacroValue>
+			<checked type='11'>0</checked>
+			<condcompareto>DoNotIncludeNUnitSolution</condcompareto>
+			<condexpr>%FastBuildSwitches%</condexpr>
+			<indent type='3'>2</indent>
+			<name>Set BuildSqlProj to false</name>
+		</step>
+		<step action='Group'>
+			<indent type='3'>2</indent>
+			<name>Calculate Release Version</name>
+		</step>
+		<step action='Group'>
+			<condcompareto>VAULTBRANDING</condcompareto>
+			<condcomparison type='3'>4</condcomparison>
+			<condexpr>%BUILD_TYPE%</condexpr>
+			<indent type='3'>3</indent>
+			<name>Normal Non-Vault Branding build</name>
+		</step>
+		<step action='Set Macro'>
+			<MacroDescr><![CDATA[<Major>,<Minor> release version]]></MacroDescr>
+			<MacroName>RELEASE_VERSION_BASE</MacroName>
+			<MacroValue>%READ_INI(%RELEASE_VERSION_INI%, release version, releaseversion_base, 9.1)%</MacroValue>
+			<indent type='3'>4</indent>
+			<name>Read major/minor release version from ini file</name>
+		</step>
+		<step action='Set Macro'>
+			<MacroDescr><![CDATA[Format <Major>.<Minor>, stamped into user doc such as web help.]]></MacroDescr>
+			<MacroName>RELEASE_VERSION_README</MacroName>
+			<MacroValue>%RELEASE_VERSION_BASE%</MacroValue>
+			<indent type='3'>4</indent>
+			<name>Set Macro RELEASE_VERSION_README</name>
+			<nologging type='11'>-1</nologging>
+		</step>
+		<step action='Set Macro'>
+			<MacroName>BUILD_VERSION</MacroName>
+			<MacroValue>%BUILD_NUMBER%</MacroValue>
+			<condcompareto>INTERNAL</condcompareto>
+			<condcomparison type='3'>4</condcomparison>
+			<condexpr>%BUILD_TYPE%</condexpr>
+			<description>%BUILD_VERSION% is passed inas Jenkins environment variable %BUILD_NUMBER%</description>
+			<indent type='3'>4</indent>
+			<name>Set Build Version from Jenkins BUILD_NUMBER</name>
+		</step>
+		<step action='Set Macro'>
+			<MacroDescr>Third segment of the release version, usually a "patch" number.  A release will have a specific number while Dev work will use the build number mod 1000 (can only be three digitis).</MacroDescr>
+			<MacroName>RELEASE_VERSION_THIRDSEGMENT</MacroName>
+			<MacroValue>%READ_INI(%RELEASE_VERSION_INI%, release version, releaseversion_thirdsegment,[%BUILD_VERSION%  mod 1000])%</MacroValue>
+			<description><![CDATA[If the "Patch" or third segment of the release version is available from the ini file
+   use that,
+else
+     use the build version mod 1000 (must be at most three digits).
+
+In general, a release will have a specific number in the ini file, while a Dev build will use the build number.  Product update logic looks at the first three segments of the version, so this will let Dev/QE update with every build (except when it loops through 1000), while using a release version that makes sense.]]></description>
+			<indent type='3'>4</indent>
+			<name>Read release version third segment (patch?) from ini file</name>
+		</step>
+		<step action='Set Macro'>
+			<MacroDescr><![CDATA[Format <Major>.<Minor>.<Patch>]]></MacroDescr>
+			<MacroName>RELEASE_VERSION</MacroName>
+			<MacroValue>%RELEASE_VERSION_BASE%.%RELEASE_VERSION_THIRDSEGMENT%</MacroValue>
+			<indent type='3'>4</indent>
+			<name>Set Macro RELEASE_VERSION</name>
+			<nologging type='11'>-1</nologging>
+		</step>
+		<step action='Set Macro'>
+			<MacroName>DoPDBs</MacroName>
+			<MacroValue>true</MacroValue>
+			<condcompareto>NIGHTLY</condcompareto>
+			<condcomparison type='3'>3</condcomparison>
+			<condexpr>%BUILD_TYPE%</condexpr>
+			<indent type='3'>4</indent>
+			<name>Set DoPDBs if Nightly BuildType</name>
+		</step>
+		<step action='Set Macro'>
+			<MacroName>BUILD_DATE</MacroName>
+			<MacroValue>[vbld_FormatDate()][vbld_FormatTime()]</MacroValue>
+			<indent type='3'>3</indent>
+			<name>Calculate New Build Date</name>
+		</step>
+		<step action='Set Macro'>
+			<MacroName>FULL_BUILD_NUMBER</MacroName>
+			<MacroValue>%RELEASE_VERSION%.%BUILD_VERSION%</MacroValue>
+			<indent type='3'>3</indent>
+			<name>Calculate full build number</name>
+		</step>
+		<step action='Set Macro'>
+			<MacroName>BUILD_LABEL</MacroName>
+			<MacroValue>%COMPANY_NAME% %FULL_BUILD_NUMBER%</MacroValue>
+			<condexpr>%BUILD_LABEL%</condexpr>
+			<description><![CDATA[Build Label calculated from Release & Build Label]]></description>
+			<indent type='3'>3</indent>
+			<name>Calculate Build Label</name>
+		</step>
+		<step action='Log Message'>
+			<Message><![CDATA[
+
+STARTING BUILD %BUILD_LABEL% AT %BUILD_DATE%
+
+]]></Message>
+			<indent type='3'>3</indent>
+			<name>Echo Build Number</name>
+		</step>
+		<step action='Subroutine Call'>
+			<Expand type='11'>-1</Expand>
+			<ParamValues array='0'>C</ParamValues>
+			<ParamValues>1</ParamValues>
+			<Parameters array='0'>DISK_DRIVE</Parameters>
+			<Parameters>GB_FREE</Parameters>
+			<SubName>Check Free Space on Disk</SubName>
+			<indent type='3'>2</indent>
+			<name>Check Free Space on C:\ Drive</name>
+		</step>
+		<step action='Subroutine Call'>
+			<Expand type='11'>-1</Expand>
+			<ParamValues array='0'>D</ParamValues>
+			<ParamValues>4</ParamValues>
+			<Parameters array='0'>DISK_DRIVE</Parameters>
+			<Parameters>GB_FREE</Parameters>
+			<SubName>Check Free Space on Disk</SubName>
+			<indent type='3'>2</indent>
+			<name>Check Free Space on D:\ Drive</name>
+		</step>
+		<step action='Run Program'>
+			<command>net use \\%MACBUILD%\BuildMachineUsageOnly /u:%MACBUILD_USER% %MACBUILD_PWD% </command>
+			<condcomparison type='3'>0</condcomparison>
+			<condexpr>%DoNotIncludeMacClient%</condexpr>
+			<indent type='3'>2</indent>
+			<name>Check connection to mac build machine</name>
+			<outputfrom type='3'>1</outputfrom>
+			<precommand>echo Attempting to connect to: \\%MACBUILD%\BuildMachineUsageOnly ...</precommand>
+		</step>
+		<step action='Group'>
+			<indent type='3'>1</indent>
+			<name>Setup DeploymentFiles Directory</name>
+		</step>
+		<step action='Delete Folder'>
+			<Path>%WORKING_DIRECTORY%\DeploymentFiles\</Path>
+			<Recurse type='11'>-1</Recurse>
+			<description>Clean up from any previous builds</description>
+			<indent type='3'>2</indent>
+			<name>Clean DeploymentFiles folder</name>
+		</step>
+		<step action='Run Program'>
+			<buildfailsteps type='11'>0</buildfailsteps>
+			<command>cmd /c mkdir %WORKING_DIRECTORY%\DeploymentFiles\</command>
+			<condcompareto>INTERNAL</condcompareto>
+			<condcomparison type='3'>4</condcomparison>
+			<condexpr>%BUILD_TYPE%</condexpr>
+			<continueonfail type='11'>-1</continueonfail>
+			<indent type='3'>2</indent>
+			<name>Create DeploymentFiles directory</name>
+			<outputfrom type='3'>1</outputfrom>
+		</step>
+		<step action='Set Macro'>
+			<MacroName>OUTPUTSUBDIR</MacroName>
+			<MacroValue>All</MacroValue>
+			<condcomparison type='3'>0</condcomparison>
+			<condexpr>%OUTPUTSUBDIR%</condexpr>
+			<indent type='3'>2</indent>
+			<name>Set OUTPUTSUBDIR if not set</name>
+		</step>
+		<step action='Run Program'>
+			<buildfailsteps type='11'>0</buildfailsteps>
+			<command>nuget restore %WORKING_DIRECTORY%\Core.sln</command>
+			<description>Fetch dependendencies from NuGet</description>
+			<indent type='3'>1</indent>
+			<name>Restore nuget</name>
+			<outputfrom type='3'>1</outputfrom>
+		</step>
+		<step action='Group'>
+			<condexpr>%DoNotBuildClients%</condexpr>
+			<indent type='3'>1</indent>
+			<name>Build clients</name>
+		</step>
+		<step action='Group'>
+			<condcompareto>VAULTBRANDING</condcompareto>
+			<condcomparison type='3'>4</condcomparison>
+			<condexpr>%BUILD_TYPE%</condexpr>
+			<indent type='3'>2</indent>
+			<name>Obfuscate, sign and Build Installers</name>
+		</step>
+		<step action='Subroutine Call'>
+			<Expand type='11'>-1</Expand>
+			<ParamValues array='0'>BuildInstallers-vNextInstallers</ParamValues>
+			<Parameters array='0'>BUILD_STAGE</Parameters>
+			<SubName>Log Major Build Stage</SubName>
+			<indent type='3'>3</indent>
+			<name>Log Major Build Stage - CompileSolutions-vNextInstallers</name>
+		</step>
+		<step action='Group'>
+			<indent type='3'>3</indent>
+			<name>Create a Template folders to be used to initialize every loop (BuildTemplate and UIAssetsTemplate)</name>
+		</step>
+		<step action='Copy Files'>
+			<Delay>15</Delay>
+			<DestDir>%WORKING_DIRECTORY%\Deployment\Client\BuildTemplate\WorkingDirectory</DestDir>
+			<Empty type='11'>-1</Empty>
+			<ExclExt>*.pdb</ExclExt>
+			<Ext>*.*</Ext>
+			<LogCopied type='11'>-1</LogCopied>
+			<ReadOnly type='11'>-1</ReadOnly>
+			<Recurse type='11'>-1</Recurse>
+			<Restartable type='11'>-1</Restartable>
+			<Retries>10</Retries>
+			<SourceDir>%WORKING_DIRECTORY%\Core\Client\ProtectionService\WorkingDirectory.Release</SourceDir>
+			<TBD type='11'>-1</TBD>
+			<continueonfail type='3'>1</continueonfail>
+			<indent type='3'>4</indent>
+			<name>Copy in the vNextClient files - WorkingDirectory</name>
+		</step>
+		<step action='Copy Files'>
+			<Delay>15</Delay>
+			<DestDir>%WORKING_DIRECTORY%\Deployment\Client\BuildTemplate\Common</DestDir>
+			<Empty type='11'>-1</Empty>
+			<ExclExt><![CDATA[*.pdb
+*.config
+*.xml]]></ExclExt>
+			<Ext>*.*</Ext>
+			<LogCopied type='11'>-1</LogCopied>
+			<ReadOnly type='11'>-1</ReadOnly>
+			<Recurse type='11'>-1</Recurse>
+			<Restartable type='11'>-1</Restartable>
+			<Retries>10</Retries>
+			<SourceDir>%WORKING_DIRECTORY%\Core\Client\DCNotifier\bin\Release</SourceDir>
+			<TBD type='11'>-1</TBD>
+			<buildfailsteps type='11'>0</buildfailsteps>
+			<checked type='11'>0</checked>
+			<continueonfail type='3'>1</continueonfail>
+			<indent type='3'>4</indent>
+			<name>Copy in the vNextClient files - DCNotifier</name>
+		</step>
+		<step action='Copy Files'>
+			<Delay>15</Delay>
+			<DestDir>%WORKING_DIRECTORY%\Deployment\Client\BuildTemplate\Common</DestDir>
+			<Empty type='11'>-1</Empty>
+			<ExclExt><![CDATA[*.pdb
+*.config
+*installlog
+*.installstate]]></ExclExt>
+			<Ext>*.*</Ext>
+			<LogCopied type='11'>-1</LogCopied>
+			<ReadOnly type='11'>-1</ReadOnly>
+			<Recurse type='11'>-1</Recurse>
+			<Restartable type='11'>-1</Restartable>
+			<Retries>10</Retries>
+			<SourceDir>%WORKING_DIRECTORY%\Core\Client\ProtectionStatusService\bin\Release</SourceDir>
+			<TBD type='11'>-1</TBD>
+			<buildfailsteps type='11'>0</buildfailsteps>
+			<checked type='11'>0</checked>
+			<continueonfail type='3'>1</continueonfail>
+			<indent type='3'>4</indent>
+			<name>Copy in the vNextClient files - DCProtectStatusService</name>
+		</step>
+		<step action='Copy Files'>
+			<Delay>15</Delay>
+			<DestDir>%WORKING_DIRECTORY%\Deployment\Client\BuildTemplate\Common</DestDir>
+			<Empty type='11'>-1</Empty>
+			<ExclExt>*.pdb</ExclExt>
+			<Ext>*.*</Ext>
+			<LogCopied type='11'>-1</LogCopied>
+			<ReadOnly type='11'>-1</ReadOnly>
+			<Restartable type='11'>-1</Restartable>
+			<Retries>10</Retries>
+			<SourceDir>%WORKING_DIRECTORY%\Core\Client\ProtectionService\bin\Release</SourceDir>
+			<TBD type='11'>-1</TBD>
+			<checked type='11'>0</checked>
+			<continueonfail type='3'>1</continueonfail>
+			<indent type='3'>4</indent>
+			<name>Copy in the vNextClient files - DCProtectService</name>
+		</step>
+		<step action='Copy Files'>
+			<Delay>15</Delay>
+			<DestDir>%WORKING_DIRECTORY%\Deployment\Client\BuildTemplate\Common</DestDir>
+			<Empty type='11'>-1</Empty>
+			<ExclExt><![CDATA[*.pdb
+*.config
+*.xml]]></ExclExt>
+			<Ext>*.*</Ext>
+			<LogCopied type='11'>-1</LogCopied>
+			<ReadOnly type='11'>-1</ReadOnly>
+			<Recurse type='11'>-1</Recurse>
+			<Restartable type='11'>-1</Restartable>
+			<Retries>10</Retries>
+			<SourceDir>%WORKING_DIRECTORY%\Core\Client\win\bin\Release</SourceDir>
+			<TBD type='11'>-1</TBD>
+			<buildfailsteps type='11'>0</buildfailsteps>
+			<checked type='11'>0</checked>
+			<continueonfail type='3'>1</continueonfail>
+			<indent type='3'>4</indent>
+			<name>Copy in the vNextClient files - win</name>
+		</step>
+		<step action='Run Program'>
+			<ShowCmd type='11'>-1</ShowCmd>
+			<checked type='11'>0</checked>
+			<command>cmd /c 7z a "%WORKING_DIRECTORY%\Deployment\Client\BuildTemplate\Common\uidist.zip" -r "%WORKING_DIRECTORY%\Core\Client\ui\dist\*"</command>
+			<indent type='3'>4</indent>
+			<name>Zip up client ui.</name>
+			<outputfrom type='3'>1</outputfrom>
+		</step>
+		<step action='Copy Files'>
+			<Delay>15</Delay>
+			<DestDir>%WORKING_DIRECTORY%\Deployment\Client\BuildTemplate\Common</DestDir>
+			<Empty type='11'>-1</Empty>
+			<ExclExt>*.pdb</ExclExt>
+			<Ext>*.exe</Ext>
+			<LogCopied type='11'>-1</LogCopied>
+			<ReadOnly type='11'>-1</ReadOnly>
+			<Restartable type='11'>-1</Restartable>
+			<Retries>10</Retries>
+			<SourceDir>%WORKING_DIRECTORY%\Core\Tools\DashboardManager\bin\Release\</SourceDir>
+			<TBD type='11'>-1</TBD>
+			<checked type='11'>0</checked>
+			<continueonfail type='3'>1</continueonfail>
+			<indent type='3'>4</indent>
+			<name>Copy in the vNextClient files - DashboardManager</name>
+		</step>
+		<step action='Run Program'>
+			<ShowCmd type='11'>-1</ShowCmd>
+			<command>cmd /c copy "%WORKING_DIRECTORY%\Core\Client\ProtectionService\app.release.config" "%WORKING_DIRECTORY%\Deployment\Client\BuildTemplate\Common\DCProtectService.exe.config"</command>
+			<indent type='3'>4</indent>
+			<name>Copy production DCProtectService.exe.config</name>
+			<outputfrom type='3'>1</outputfrom>
+		</step>
+		<step action='Run Program'>
+			<ShowCmd type='11'>-1</ShowCmd>
+			<command>cmd /c copy "%WORKING_DIRECTORY%\Core\Client\ProtectionStatusService\app.release.config" "%WORKING_DIRECTORY%\Deployment\Client\BuildTemplate\Common\DCProtectServiceStatus.exe.config"</command>
+			<indent type='3'>4</indent>
+			<name>Copy production  DCProtectStatusService.exe.config</name>
+			<outputfrom type='3'>1</outputfrom>
+		</step>
+		<step action='Run Program'>
+			<ShowCmd type='11'>-1</ShowCmd>
+			<buildfailsteps type='11'>0</buildfailsteps>
+			<command>cmd /c copy "%WORKING_DIRECTORY%\Core\Client\DCProtect\app.release.config" "%WORKING_DIRECTORY%\Deployment\Client\BuildTemplate\Common\DCProtect.exe.config"</command>
+			<continueonfail type='3'>1</continueonfail>
+			<indent type='3'>4</indent>
+			<name>Copy production DCProtect.exe.config</name>
+			<outputfrom type='3'>1</outputfrom>
+		</step>
+		<step action='Run Program'>
+			<ShowCmd type='11'>-1</ShowCmd>
+			<buildfailsteps type='11'>0</buildfailsteps>
+			<command>cmd /c copy "%WORKING_DIRECTORY%\Core\Client\DCNotifier\app.release.config" "%WORKING_DIRECTORY%\Deployment\Client\BuildTemplate\Common\DCNotifier.exe.config"</command>
+			<continueonfail type='3'>1</continueonfail>
+			<indent type='3'>4</indent>
+			<name>Copy production DCNotifier.exe.config</name>
+			<outputfrom type='3'>1</outputfrom>
+		</step>
+		<step action='Run Program'>
+			<ShowCmd type='11'>-1</ShowCmd>
+			<buildfailsteps type='11'>0</buildfailsteps>
+			<command>cmd /c copy "%WORKING_DIRECTORY%\Core\Client\win\app.release.config" "%WORKING_DIRECTORY%\Deployment\Client\BuildTemplate\Common\DCProtect.exe.config"</command>
+			<continueonfail type='3'>1</continueonfail>
+			<indent type='3'>4</indent>
+			<name>Copy production DCProtect.exe.config</name>
+			<outputfrom type='3'>1</outputfrom>
+		</step>
+		<step action='Copy Files'>
+			<Delay>15</Delay>
+			<DestDir>%WORKING_DIRECTORY%\Deployment\Client\BuildTemplate</DestDir>
+			<Empty type='11'>-1</Empty>
+			<Ext>*.*</Ext>
+			<LogCopied type='11'>-1</LogCopied>
+			<ReadOnly type='11'>-1</ReadOnly>
+			<Recurse type='11'>-1</Recurse>
+			<Restartable type='11'>-1</Restartable>
+			<Retries>10</Retries>
+			<SourceDir>%WORKING_DIRECTORY%\Deployment\Client\build</SourceDir>
+			<TBD type='11'>-1</TBD>
+			<continueonfail type='3'>1</continueonfail>
+			<indent type='3'>4</indent>
+			<name>Copy files from build- these will overwrite anything from above</name>
+		</step>
+		<step action='Copy Files'>
+			<Delay>15</Delay>
+			<DestDir>%WORKING_DIRECTORY%\Deployment\Client\win setup\DCProtect\UIAssetsTemplate</DestDir>
+			<Empty type='11'>-1</Empty>
+			<Ext>*.*</Ext>
+			<LogCopied type='11'>-1</LogCopied>
+			<ReadOnly type='11'>-1</ReadOnly>
+			<Recurse type='11'>-1</Recurse>
+			<Restartable type='11'>-1</Restartable>
+			<Retries>10</Retries>
+			<SourceDir>%WORKING_DIRECTORY%\Deployment\Client\win setup\DCProtect\UIAssets</SourceDir>
+			<TBD type='11'>-1</TBD>
+			<continueonfail type='3'>1</continueonfail>
+			<indent type='3'>4</indent>
+			<name>Copy UIAssets to UIAssetsTemplate</name>
+		</step>
+		<step action='Enhanced Zip Files'>
+			<Action type='3'>2</Action>
+			<ComprMethod type='3'>1</ComprMethod>
+			<Compression>6</Compression>
+			<Delete type='11'>-1</Delete>
+			<Dest>%WORKING_DIRECTORY%\DeploymentFiles\PrivateClientIntermediateArtifacts-%FULL_BUILD_NUMBER%.zip</Dest>
+			<Ext><![CDATA[Core\Client\DCNotifier\bin\release\*.*
+Core\Client\DCNotifier\bin\release\**\*.dll
+Core\Client\ProtectionStatusService\bin\Release\*.*
+Core\Client\ProtectionService\bin\Release\*.*
+Core\Client\win\bin\Release\*.*
+Core\Client\win\bin\Release\**\*.dll
+Core\Client\ui\dist\**\*.*
+Core\Tools\DashboardManager\bin\Release\*.*
+packages\**\*.*]
+Deployment\Client\**\*.dll
+Deployment\Client\**\*.exe]]></Ext>
+			<HideOn type='11'>-1</HideOn>
+			<LogDetail type='11'>-1</LogDetail>
+			<Recurse type='11'>-1</Recurse>
+			<Source>%WORKING_DIRECTORY%\</Source>
+			<SysOn type='11'>-1</SysOn>
+			<Unicode type='11'>-1</Unicode>
+			<buildfailsteps type='11'>0</buildfailsteps>
+			<checked type='11'>0</checked>
+			<description>Assemble intermediate artifacts in the original folder structure, to be used by the client branding build.  The goal is to unzip into the workspace to make it look liike everything has been compiled</description>
+			<indent type='3'>4</indent>
+			<name>Zip Client Intermediate build artifacts</name>
+		</step>
+		<step action='Group'>
+			<condexpr>%SkipClientObfuscation%</condexpr>
+			<indent type='3'>3</indent>
+			<name>Obfuscate and Sign Build</name>
+		</step>
+		<step action='Group'>
+			<condcomparison type='3'>0</condcomparison>
+			<condexpr>%SkipClientObfuscation%</condexpr>
+			<indent type='3'>4</indent>
+			<name>Obfuscate windows client</name>
+		</step>
+		<step action='Delete Folder'>
+			<Path>%WORKING_DIRECTORY%\Deployment\Client\BuildTemplate-DotfuscatorOutput</Path>
+			<Recurse type='11'>-1</Recurse>
+			<indent type='3'>5</indent>
+			<name>Clean any previous Dotfuscator output</name>
+		</step>
+		<step action='Run Program'>
+			<buildfailsteps type='11'>0</buildfailsteps>
+			<command>cmd /c mkdir %WORKING_DIRECTORY%\Deployment\Client\BuildTemplate-DotfuscatorOutput</command>
+			<continueonfail type='3'>1</continueonfail>
+			<indent type='3'>5</indent>
+			<name>Create Dofuscator Output directory</name>
+			<outputfrom type='3'>1</outputfrom>
+		</step>
+		<step action='Copy Files'>
+			<Delay>15</Delay>
+			<DestDir>%WORKING_DIRECTORY%\Deployment\Client\BuildTemplate\Common</DestDir>
+			<Ext>datacastle_dashboard.snk</Ext>
+			<Incremental type='11'>-1</Incremental>
+			<LogCopied type='11'>-1</LogCopied>
+			<ReadOnly type='11'>-1</ReadOnly>
+			<Retries>10</Retries>
+			<SourceDir>%WORKING_DIRECTORY%\Core\Common\Datacastle.Common.Installation\</SourceDir>
+			<TBD type='11'>-1</TBD>
+			<buildfailsteps type='11'>0</buildfailsteps>
+			<indent type='3'>5</indent>
+			<name>Copy Datacastle Installation SNK File</name>
+		</step>
+		<step action='Run Program'>
+			<ShowCmd type='11'>-1</ShowCmd>
+			<command>"dotfuscator.exe" /p=configdir=%WORKING_DIRECTORY%\Deployment\Client\BuildTemplate\Common "%WORKING_DIRECTORY%\build\DotfuscateClient.xml"</command>
+			<description>Switched to 6.1.505 - older versions of 2008 were not loading the 2007 project successfully</description>
+			<indent type='3'>5</indent>
+			<name>Run Dotfuscator</name>
+			<outputfrom type='3'>1</outputfrom>
+		</step>
+		<step action='Run Program'>
+			<ShowCmd type='11'>-1</ShowCmd>
+			<command>cmd /c copy "%WORKING_DIRECTORY%\Deployment\Client\BuildTemplate-DotfuscatorOutput\ClientMap.xml" "%WORKING_DIRECTORY%\DeploymentFiles\%RELEASE_VERSION%.%BUILD_VERSION%.%BUILD_DATE%-ClientMap.xml"</command>
+			<indent type='3'>5</indent>
+			<name>Copy Dotfuscator BuildMap</name>
+			<outputfrom type='3'>1</outputfrom>
+		</step>
+		<step action='Copy Files'>
+			<Delay>15</Delay>
+			<DestDir>%WORKING_DIRECTORY%\Deployment\Client\BuildTemplate\Common</DestDir>
+			<Empty type='11'>-1</Empty>
+			<ExclExt>DashboardManager.exe</ExclExt>
+			<Ext>*.*</Ext>
+			<LogCopied type='11'>-1</LogCopied>
+			<ReadOnly type='11'>-1</ReadOnly>
+			<Restartable type='11'>-1</Restartable>
+			<Retries>10</Retries>
+			<SourceDir>%WORKING_DIRECTORY%\Deployment\Client\BuildTemplate-DotfuscatorOutput\Common</SourceDir>
+			<TBD type='11'>-1</TBD>
+			<continueonfail type='3'>1</continueonfail>
+			<indent type='3'>5</indent>
+			<name>Copy BuildTemplate-Dotfuscator to BuildTemplate\Common</name>
+		</step>
+		<step action='Copy Files'>
+			<Delay>15</Delay>
+			<DestDir>%WORKING_DIRECTORY%\DeploymentFiles\PSVault\bin\Dashboard\Tools\DashboardManager</DestDir>
+			<Ext>DashboardManager.EXE</Ext>
+			<LogCopied type='11'>-1</LogCopied>
+			<ReadOnly type='11'>-1</ReadOnly>
+			<Restartable type='11'>-1</Restartable>
+			<Retries>10</Retries>
+			<SourceDir>%WORKING_DIRECTORY%\Deployment\Client\BuildTemplate-DotfuscatorOutput\Common</SourceDir>
+			<TBD type='11'>-1</TBD>
+			<indent type='3'>5</indent>
+			<name>Copy DashboardManager </name>
+		</step>
+		<step action='Group'>
+			<condcomparison type='3'>1</condcomparison>
+			<condexpr>%SkipClientObfuscation%</condexpr>
+			<indent type='3'>4</indent>
+			<name>Don't Dotfuscate build</name>
+		</step>
+		<step action='Copy Files'>
+			<Delay>15</Delay>
+			<DestDir>%WORKING_DIRECTORY%\DeploymentFiles\PSVault\bin\Dashboard\Tools\DashboardManager</DestDir>
+			<Ext>DashboardManager.EXE</Ext>
+			<LogCopied type='11'>-1</LogCopied>
+			<ReadOnly type='11'>-1</ReadOnly>
+			<Restartable type='11'>-1</Restartable>
+			<Retries>10</Retries>
+			<SourceDir>%WORKING_DIRECTORY%\Deployment\Client\BuildTemplate\Common</SourceDir>
+			<TBD type='11'>-1</TBD>
+			<indent type='3'>5</indent>
+			<name>Copy DashboardManager </name>
+		</step>
+		<step action='Group'>
+			<indent type='3'>3</indent>
+			<name>Sign Assemblies and PS scripts</name>
+		</step>
+		<step action='Group'>
+			<condcomparison type='3'>0</condcomparison>
+			<condexpr>%DoNotIncludeSigning%</condexpr>
+			<description>Unless SkipCodeSigning is set, sign the code</description>
+			<indent type='3'>4</indent>
+			<name>Code Sign</name>
+		</step>
+		<step action='Run Program'>
+			<ShowCmd type='11'>-1</ShowCmd>
+			<command>"%SIGN_DIR%\CodeSigningToolSHA256\SignSha256AndSha1.cmd" "%WORKING_DIRECTORY%\Deployment\Client\BuildTemplate\Common\DCProtect.exe" "DCProtect" </command>
+			<condcompareto>True</condcompareto>
+			<condexpr>%BRAND_SIGNED_FLAG%</condexpr>
+			<description><![CDATA[
+]]></description>
+			<failsubroutine>Exit</failsubroutine>
+			<indent type='3'>5</indent>
+			<name>Sign DCProtect EXE</name>
+			<outputfrom type='3'>1</outputfrom>
+		</step>
+		<step action='Run Program'>
+			<ShowCmd type='11'>-1</ShowCmd>
+			<command>"%SIGN_DIR%\CodeSigningToolSHA256\SignSha256AndSha1.cmd" "%WORKING_DIRECTORY%\Deployment\Client\BuildTemplate\Common\DCProtectService.exe" "DCProtect"</command>
+			<condcompareto>True</condcompareto>
+			<condexpr>%BRAND_SIGNED_FLAG%</condexpr>
+			<description><![CDATA[
+]]></description>
+			<failsubroutine>Exit</failsubroutine>
+			<indent type='3'>5</indent>
+			<name>Sign DCProtectService EXE</name>
+			<outputfrom type='3'>1</outputfrom>
+		</step>
+		<step action='Run Program'>
+			<ShowCmd type='11'>-1</ShowCmd>
+			<command>"%SIGN_DIR%\CodeSigningToolSHA256\SignSha256AndSha1.cmd" "%WORKING_DIRECTORY%\Deployment\Client\BuildTemplate\Common\DCNotifier.exe" "DCNotifier" </command>
+			<condcompareto>True</condcompareto>
+			<condexpr>%BRAND_SIGNED_FLAG%</condexpr>
+			<description><![CDATA[
+]]></description>
+			<failsubroutine>Exit</failsubroutine>
+			<indent type='3'>5</indent>
+			<name>Sign DCNotifier EXE</name>
+			<outputfrom type='3'>1</outputfrom>
+		</step>
+		<step action='Run Program'>
+			<ShowCmd type='11'>-1</ShowCmd>
+			<command>"%SIGN_DIR%\CodeSigningToolSHA256\SignSha256AndSha1.cmd" "%WORKING_DIRECTORY%\DeploymentFiles\PSVault\bin\Dashboard\Tools\DashboardManager\DashboardManager.exe" "Carbonite Dashboard Manager"</command>
+			<condcompareto>True</condcompareto>
+			<condexpr>%BRAND_SIGNED_FLAG%</condexpr>
+			<description><![CDATA[
+]]></description>
+			<failsubroutine>Exit</failsubroutine>
+			<indent type='3'>5</indent>
+			<name>Sign DashboardManager</name>
+			<outputfrom type='3'>1</outputfrom>
+		</step>
+		<step action='Run Program'>
+			<ShowCmd type='11'>-1</ShowCmd>
+			<checked type='11'>0</checked>
+			<command>"%SIGN_DIR%\CodeSigningToolSHA256\SignSha256AndSha1.cmd" "%WORKING_DIRECTORY%\Core\Tools\SeedingTool\bin\Release\SeedingTool.exe" "Seeding Tool"</command>
+			<condcompareto>True</condcompareto>
+			<condexpr>%BRAND_SIGNED_FLAG%</condexpr>
+			<description><![CDATA[
+]]></description>
+			<failsubroutine>Exit</failsubroutine>
+			<indent type='3'>5</indent>
+			<name>Sign Seedingtool EXE</name>
+			<outputfrom type='3'>1</outputfrom>
+		</step>
+		<step action='Run Program'>
+			<ShowCmd type='11'>-1</ShowCmd>
+			<checked type='11'>0</checked>
+			<command>"%SIGN_DIR%\signtool.exe" sign /f "%SIGN_DIR%\datacastle.pfx" /d "Carbonite Powershell Scripts" /t "http://timestamp.verisign.com/scripts/timstamp.dll" /v "%WORKING_DIRECTORY%\Deployment\Server\DefaultServerLayout\*.ps1" "%WORKING_DIRECTORY%\Deployment\Server\DefaultServerLayout\Library\*.ps1" "%WORKING_DIRECTORY%\Deployment\Server\DefaultServerLayout\Library\Classes\*.ps1" "%WORKING_DIRECTORY%\Deployment\Server\DefaultServerLayout\Library\Common\*.ps1" "%WORKING_DIRECTORY%\Deployment\Server\DefaultServerLayout\Library\DashboardDBRole\*.ps1" "%WORKING_DIRECTORY%\Deployment\Server\DefaultServerLayout\Library\DashboardRole\*.ps1" "%WORKING_DIRECTORY%\Deployment\Server\DefaultServerLayout\Library\DashboardWebRole\*.ps1" "%WORKING_DIRECTORY%\Deployment\Server\DefaultServerLayout\Library\DatabaseRole\*.ps1" "%WORKING_DIRECTORY%\Deployment\Server\DefaultServerLayout\Library\JobProcessorRole\*.ps1" "%WORKING_DIRECTORY%\Deployment\Server\DefaultServerLayout\Library\Utility\*.ps1" "%WORKING_DIRECTORY%\Deployment\Server\DefaultServerLayout\Library\JobProcessorRole\*.ps1" "%WORKING_DIRECTORY%\Deployment\Server\DefaultServerLayout\Tools\*.ps1" "%WORKING_DIRECTORY%\Deployment\Server\PrivatePowershellScripts\*.ps1"</command>
+			<condcompareto>True</condcompareto>
+			<condexpr>%BRAND_SIGNED_FLAG%</condexpr>
+			<description><![CDATA[
+]]></description>
+			<failsubroutine>Exit</failsubroutine>
+			<indent type='3'>5</indent>
+			<name>Sign Powershell Scripts</name>
+			<outputfrom type='3'>1</outputfrom>
+		</step>
+		<step action='VisBuildPro Project'>
+			<Capture type='11'>-1</Capture>
+			<OpenFailGUI type='11'>-1</OpenFailGUI>
+			<ParamValues array='0'>%RELEASE_VERSION%</ParamValues>
+			<ParamValues>%BUILD_VERSION%</ParamValues>
+			<ParamValues>%FULL_BUILD_NUMBER%</ParamValues>
+			<ParamValues>%BUILD_DATE%</ParamValues>
+			<ParamValues>%ClientSxSOverrideLoopCount%</ParamValues>
+			<ParamValues>%TIMER_MAJOR%</ParamValues>
+			<ParamValues>%TIMER_MAJOR_STAGE%</ParamValues>
+			<Parameters array='0'>RELEASE_VERSION</Parameters>
+			<Parameters>BUILD_VERSION</Parameters>
+			<Parameters>FULL_BUILD_NUMBER</Parameters>
+			<Parameters>BUILD_DATE</Parameters>
+			<Parameters>ClientSxSOverrideLoopCount</Parameters>
+			<Parameters>TIMER_MAJOR</Parameters>
+			<Parameters>TIMER_MAJOR_STAGE</Parameters>
+			<PassThru type='11'>-1</PassThru>
+			<ProjectName>Datacastle-Assemble-Clients.bld</ProjectName>
+			<ShowCmd type='11'>-1</ShowCmd>
+			<buildfailsteps type='11'>0</buildfailsteps>
+			<condcomparison type='3'>0</condcomparison>
+			<condexpr>%DoNotBuildClients%</condexpr>
+			<description>Assemble Client Installers</description>
+			<indent type='3'>2</indent>
+			<name>VisBuildPro Project -- Datacastle-Assemble-Clients.bld</name>
+		</step>
+		<step action='Group'>
+			<description>Save the setup and msi files generated from this build</description>
+			<indent type='3'>1</indent>
+			<name>Save Builds and Deployment Files </name>
+		</step>
+		<step action='Subroutine Call'>
+			<Expand type='11'>-1</Expand>
+			<ParamValues array='0'>Save Build Output</ParamValues>
+			<Parameters array='0'>BUILD_STAGE</Parameters>
+			<SubName>Log Major Build Stage</SubName>
+			<indent type='3'>2</indent>
+			<name>Log Major Build Stage - Save Build Output</name>
+		</step>
+		<step action='Delete Folder'>
+			<Path>%BUILDOUTPUT_PRIVATE%</Path>
+			<Recurse type='11'>-1</Recurse>
+			<description>Clean up from any previous builds</description>
+			<indent type='3'>2</indent>
+			<name>Clean Build Output Private Folder</name>
+		</step>
+		<step action='Delete Folder'>
+			<Path>%BUILDOUTPUT_PUBLIC%</Path>
+			<Recurse type='11'>-1</Recurse>
+			<description>Clean up from any previous builds</description>
+			<indent type='3'>2</indent>
+			<name>Clean Build Output Public Folder</name>
+		</step>
+		<step action='Copy Files'>
+			<Delay>15</Delay>
+			<DestDir>%BUILDOUTPUT_PRIVATE%\Client-Side-by-Side</DestDir>
+			<Ext>DCProtect*.SS*-Carbonite*.msi</Ext>
+			<Flat type='11'>-1</Flat>
+			<Incremental type='11'>-1</Incremental>
+			<LogCopied type='11'>-1</LogCopied>
+			<Move type='11'>-1</Move>
+			<ReadOnly type='11'>-1</ReadOnly>
+			<Recurse type='11'>-1</Recurse>
+			<Restartable type='11'>-1</Restartable>
+			<Retries>10</Retries>
+			<SourceDir>%WORKING_DIRECTORY%\DeploymentFiles</SourceDir>
+			<TBD type='11'>-1</TBD>
+			<indent type='3'>2</indent>
+			<name>Save Private Client Side-by-Side Installers</name>
+		</step>
+		<step action='Copy Files'>
+			<Delay>15</Delay>
+			<DestDir>%BUILDOUTPUT_PRIVATE%\Client-WithPassphrase</DestDir>
+			<Ext>DCProtect*WithPassphrase.*</Ext>
+			<Flat type='11'>-1</Flat>
+			<Incremental type='11'>-1</Incremental>
+			<LogCopied type='11'>-1</LogCopied>
+			<Move type='11'>-1</Move>
+			<ReadOnly type='11'>-1</ReadOnly>
+			<Recurse type='11'>-1</Recurse>
+			<Restartable type='11'>-1</Restartable>
+			<Retries>10</Retries>
+			<SourceDir>%WORKING_DIRECTORY%\DeploymentFiles</SourceDir>
+			<TBD type='11'>-1</TBD>
+			<indent type='3'>2</indent>
+			<name>Save Private Client Installers</name>
+		</step>
+		<step action='Copy Files'>
+			<Delay>15</Delay>
+			<DestDir>%BUILDOUTPUT_PUBLIC%\Client-NoPassphrase</DestDir>
+			<ExclExt>DCProtect-*-WithPassphrase.*</ExclExt>
+			<Ext><![CDATA[DCProtect-*.*
+]]></Ext>
+			<Flat type='11'>-1</Flat>
+			<LogCopied type='11'>-1</LogCopied>
+			<Move type='11'>-1</Move>
+			<ReadOnly type='11'>-1</ReadOnly>
+			<Recurse type='11'>-1</Recurse>
+			<Restartable type='11'>-1</Restartable>
+			<Retries>10</Retries>
+			<SourceDir>%WORKING_DIRECTORY%\DeploymentFiles</SourceDir>
+			<TBD type='11'>-1</TBD>
+			<indent type='3'>2</indent>
+			<name>Save Client Installers</name>
+		</step>
+		<step action='Copy Files'>
+			<Delay>15</Delay>
+			<DestDir>%BUILDOUTPUT_PRIVATE%\Build</DestDir>
+			<Ext><![CDATA[%PROJFILE%
+build.ini
+version.ini]]></Ext>
+			<Flat type='11'>-1</Flat>
+			<LogCopied type='11'>-1</LogCopied>
+			<Move type='11'>-1</Move>
+			<ReadOnly type='11'>-1</ReadOnly>
+			<Recurse type='11'>-1</Recurse>
+			<Restartable type='11'>-1</Restartable>
+			<Retries>10</Retries>
+			<SourceDir>%WORKING_DIRECTORY%\build</SourceDir>
+			<TBD type='11'>-1</TBD>
+			<indent type='3'>2</indent>
+			<name>Save Private Build Config</name>
+		</step>
+		<step action='Group'>
+			<indent type='3'>1</indent>
+			<name>Completion Phase</name>
+		</step>
+		<step action='Subroutine Call'>
+			<Expand type='11'>-1</Expand>
+			<ParamValues array='0'>StartCompletion</ParamValues>
+			<Parameters array='0'>BUILD_STAGE</Parameters>
+			<SubName>Log Major Build Stage</SubName>
+			<indent type='3'>2</indent>
+			<name>Log Major Build Stage - Completion</name>
+		</step></steps>
+	<steps type='1'>
+		<step action='Group'>
+			<description>Checks a nominated drive to report free space</description>
+			<name>Check Free Space on Disk</name>
+		</step>
+		<step action='Run Script'>
+			<Language>VBScript</Language>
+			<Script><![CDATA[Set objWMIService = GetObject("winmgmts:")
+Set objLogicalDisk = objWMIService.Get("Win32_LogicalDisk.DeviceID='%DISK_DRIVE%:'")
+
+iSpc= objLogicalDisk.FreeSpace/1000
+iSpc= iSpc/1000
+iSpc= iSpc/1000
+iSpc= FormatNumber(iSpc,1)
+
+'To capture the Date & Time, use "Now" function instead of "Date"
+Wscript.Echo " %DISK_DRIVE%: " & iSpc & " GB Free space or " & objLogicalDisk.FreeSpace
+
+Project.Macros.Add "FREE_SPACE_GB", iSpc
+
+If iSpc < %GB_FREE% Then
+	Wscript.Echo "Free space alert - LOW DISK SPACE"
+	Project.Macros.Add "FREE_SPACE_ALERT", 1
+ELSE
+	Project.Macros.Add "FREE_SPACE_ALERT", 0
+End If
+]]></Script>
+			<buildfailsteps type='11'>0</buildfailsteps>
+			<continueonfail type='3'>1</continueonfail>
+			<indent type='3'>1</indent>
+			<name>Free Disk Space</name>
+		</step>
+		<step action='Exit'>
+			<Message>Disk Space is low.</Message>
+			<Status type='3'>1</Status>
+			<condcompareto>1</condcompareto>
+			<condcomparison type='3'>3</condcomparison>
+			<condexpr>%FREE_SPACE_ALERT%</condexpr>
+			<indent type='3'>1</indent>
+			<name>Exit</name>
+		</step>
+		<step action='Group'>
+			<checked type='11'>0</checked>
+			<name>File Exists</name>
+		</step>
+		<step action='Run Script'>
+			<Language>VBScript</Language>
+			<Script><![CDATA[Dim fs
+Set fs = CreateObject("Scripting.FileSystemObject")
+
+If fs.FileExists("%FILE_EXISTS_NAME%") Then
+	Wscript.Echo "File Exists - %FILE_EXISTS_NAME%"
+	Project.Macros.Add "FILE_EXISTS", 1
+ELSE
+	Wscript.Echo "File DOES NOT Exist - %FILE_EXISTS_NAME%"
+	Project.Macros.Add "FILE_EXISTS", 0
+End If
+]]></Script>
+			<checked type='11'>0</checked>
+			<indent type='3'>1</indent>
+			<name>Does File Exists</name>
+		</step>
+		<step action='Group'>
+			<description>Logs the passed in message with timing. Useful to easily search in log file to see how long build taking.</description>
+			<name>Log Major Build Stage</name>
+		</step>
+		<step action='Log Message'>
+			<Message><![CDATA[
+
+%DATETIME%: ---------- MAJOR BUILD STAGE LOG: %BUILD_STAGE%]]></Message>
+			<indent type='3'>1</indent>
+			<name>Log Message</name>
+		</step>
+		<step action='Write File'>
+			<Append type='11'>-1</Append>
+			<Filename>%TIMER_DATA%</Filename>
+			<Text><![CDATA[EndpointMidmarket, %BUILD_LEVEL%, %BRANCH%, %BUILD_ID%, %DATETIME%, Execute, Build, %TIMER_MAJOR_STAGE%, %TIMER_MINOR_STAGE%, [Int(Timer() - %TIMER_MINOR%)]
+]]></Text>
+			<condcomparison type='3'>1</condcomparison>
+			<condexpr>%TIMER_MINOR_STAGE%</condexpr>
+			<indent type='3'>1</indent>
+			<name>Write Minor Timing data to  File</name>
+		</step>
+		<step action='Write File'>
+			<Append type='11'>-1</Append>
+			<Filename>%TIMER_DATA%</Filename>
+			<Text><![CDATA[EndpointMidmarket, %BUILD_LEVEL%, %BRANCH%, %BUILD_ID%, %DATETIME%, Execute, Build, %TIMER_MAJOR_STAGE%, Total, [int(Timer() - %TIMER_MAJOR%)]
+]]></Text>
+			<condcomparison type='3'>1</condcomparison>
+			<condexpr>%TIMER_MAJOR_STAGE%</condexpr>
+			<indent type='3'>1</indent>
+			<name>Write Major Timing data to  File</name>
+		</step>
+		<step action='Set Macro'>
+			<MacroDescr>Start timer so we can write out timing data once this stage is done</MacroDescr>
+			<MacroName>TIMER_MAJOR</MacroName>
+			<MacroValue>"[Timer()]"</MacroValue>
+			<indent type='3'>1</indent>
+			<name>Set Major Timer</name>
+		</step>
+		<step action='Set Macro'>
+			<MacroDescr>Store the current stage so we can write out timing data once it is done</MacroDescr>
+			<MacroName>TIMER_MAJOR_STAGE</MacroName>
+			<MacroValue>%BUILD_STAGE%</MacroValue>
+			<indent type='3'>1</indent>
+			<name>Set Major Timer Stage</name>
+		</step>
+		<step action='Set Macro'>
+			<Category>Temporary</Category>
+			<DeleteMacro type='11'>-1</DeleteMacro>
+			<MacroDescr>Store the current seconds since midnight so we can write out timing data once it is done</MacroDescr>
+			<MacroName>TIMER_MINOR</MacroName>
+			<indent type='3'>1</indent>
+			<name>Clear Minor Timer</name>
+		</step>
+		<step action='Set Macro'>
+			<Category>Temporary</Category>
+			<DeleteMacro type='11'>-1</DeleteMacro>
+			<MacroName>TIMER_MINOR_STAGE</MacroName>
+			<indent type='3'>1</indent>
+			<name>Clear Minor Timer Stage</name>
+		</step>
+		<step action='Group'>
+			<description>Logs the passed in message with timing. Useful to easily search in log file to see how long build taking.</description>
+			<name>Log Minor Build Stage</name>
+		</step>
+		<step action='Log Message'>
+			<Message><![CDATA[
+%DATETIME%: ----- MINOR BUILD STAGE LOG: %BUILD_STAGE%]]></Message>
+			<indent type='3'>1</indent>
+			<name>Log Message</name>
+		</step>
+		<step action='Write File'>
+			<Append type='11'>-1</Append>
+			<Filename>%TIMER_DATA%</Filename>
+			<Text><![CDATA[EndpointMidmarket, %BUILD_LEVEL%, %BRANCH%, %BUILD_ID%, %DATETIME%, Execute, Build, %TIMER_MAJOR_STAGE%, %TIMER_MINOR_STAGE%, [Int(Timer() - %TIMER_MINOR%)]
+]]></Text>
+			<condcomparison type='3'>1</condcomparison>
+			<condexpr>%TIMER_MINOR_STAGE%</condexpr>
+			<indent type='3'>1</indent>
+			<name>Write Minor Timing data to  File</name>
+		</step>
+		<step action='Set Macro'>
+			<MacroDescr>Start timer so we can write out timing data once this stage is done</MacroDescr>
+			<MacroName>TIMER_MINOR</MacroName>
+			<MacroValue>"[Timer()]"</MacroValue>
+			<indent type='3'>1</indent>
+			<name>Set Minor Timer</name>
+		</step>
+		<step action='Set Macro'>
+			<MacroDescr>Store the current stage so we can write out timing data once it is done</MacroDescr>
+			<MacroName>TIMER_MINOR_STAGE</MacroName>
+			<MacroValue>%BUILD_STAGE%</MacroValue>
+			<indent type='3'>1</indent>
+			<name>Set Minor Timer Stage</name>
+		</step></steps>
+	<steps type='2'>
+		<step action='Group'>
+			<name>Exit</name>
+		</step>
+		<step action='Write File'>
+			<Filename>Failure.txt</Filename>
+			<Text>%FAILSTEP_OUTPUT%</Text>
+			<condcompareto>INTERNAL</condcompareto>
+			<condexpr>%BUILD_TYPE%</condexpr>
+			<indent type='3'>1</indent>
+			<name>Write summary log to BuildOutput</name>
+		</step>
+		<step action='Run Program'>
+			<ShowCmd type='11'>-1</ShowCmd>
+			<checked type='11'>0</checked>
+			<command>cmd /c move %LOGFILE% %BUILDOUTPUTDIR_ALL%\</command>
+			<condcompareto>INTERNAL</condcompareto>
+			<condexpr>%BUILD_TYPE%</condexpr>
+			<indent type='3'>1</indent>
+			<name>Save Failed Build Log with BuildOutput directory</name>
+			<outputfrom type='3'>1</outputfrom>
+		</step>
+		<step action='Exit'>
+			<Status type='3'>1</Status>
+			<indent type='3'>1</indent>
+			<name>Exit</name>
+		</step>
+		<step action='Group'>
+			<checked type='11'>0</checked>
+			<name>Report Unit Test Error</name>
+		</step>
+		<step action='Run Program'>
+			<ShowCmd type='11'>-1</ShowCmd>
+			<checked type='11'>0</checked>
+			<command>cmd /c copy %LOGFILE% %BUILDOUTPUTDIR_ALL%\</command>
+			<condcompareto>INTERNAL</condcompareto>
+			<condexpr>%BUILD_TYPE%</condexpr>
+			<indent type='3'>1</indent>
+			<name>Save Failed Build Log with BuildOutput directory</name>
+			<outputfrom type='3'>1</outputfrom>
+		</step>
+		<step action='Write File'>
+			<Filename>%BUILDOUTPUTDIR_ALL%\TestResults\Result-Summary_%FULL_BUILD_NUMBER%.txt</Filename>
+			<Text>%FAILSTEP_OUTPUT%</Text>
+			<checked type='11'>0</checked>
+			<indent type='3'>1</indent>
+			<name>Write File</name>
+		</step>
+		<step action='Run Script'>
+			<Language>VBScript</Language>
+			<Script><![CDATA[Dim fso
+Dim file
+Dim line
+Dim FailedTests
+Const TestResults = "%BUILDOUTPUTDIR_ALL%\TestResults\Result-Summary_%FULL_BUILD_NUMBER%.txt"
+
+Set fso = CreateObject("Scripting.FileSystemObject")
+Set file = fso.OpenTextFile(TestResults, 1, False)
+
+Do Until file.AtEndOfStream
+	line = file.ReadLine
+	If Left(line, Len("Failed")) = "Failed" Then
+		FailedTests = FailedTests + line + vbcrlf
+	End If
+Loop
+
+
+wscript.Echo "Failed Tests are: " & vbcrlf & FailedTests
+
+if FailedTests = "" Then
+	wscript.Echo "No tests actually failed"
+	Set objMacro = vbld_TempMacros.Add("SEND_FAILED_MAIL", "false")
+	vbld_AllMacros.Item("UNIT_TESTS_FAILED").Value = "false"
+else
+	wscript.Echo "Tests actually failed"
+	vbld_TempMacros.add "FailedUnitTests", FailedTests, "", "", false
+	Set objMacro = vbld_TempMacros.Add("SEND_FAILED_MAIL", "true")
+	vbld_AllMacros.Item("UNIT_TESTS_FAILED").Value = "true"
+end if
+
+wscript.Echo "Send Mail: " & vbld_AllMacros.Item("SEND_FAILED_MAIL").Value]]></Script>
+			<checked type='11'>0</checked>
+			<indent type='3'>1</indent>
+			<name><![CDATA[Get Failed & Errored Tests]]></name>
+		</step>
+		<step action='Run Program'>
+			<ShowCmd type='11'>-1</ShowCmd>
+			<checked type='11'>0</checked>
+			<command>cmd /c copy %LOGFILE% %LOGFILE%_failed_%RELEASE_VERSION%.%BUILD_VERSION%.%BUILD_DATE%.txt</command>
+			<indent type='3'>1</indent>
+			<name>Backup Failed Build Log</name>
+			<outputfrom type='3'>1</outputfrom>
+		</step>
+		<step action='Group'>
+			<checked type='11'>0</checked>
+			<name>Report Build of Tests Failure</name>
+		</step>
+		<step action='Write File'>
+			<Filename>%BUILDOUTPUTDIR_ALL%\Failure_%BUILD_LABEL%.txt</Filename>
+			<Text>%FAILSTEP_OUTPUT%</Text>
+			<checked type='11'>0</checked>
+			<condcompareto>INTERNAL</condcompareto>
+			<condexpr>%BUILD_TYPE%</condexpr>
+			<indent type='3'>1</indent>
+			<name>Write summary log to BuildOutput</name>
+		</step>
+		<step action='Run Program'>
+			<ShowCmd type='11'>-1</ShowCmd>
+			<checked type='11'>0</checked>
+			<command>cmd /c move %LOGFILE% %BUILDOUTPUTDIR_ALL%\</command>
+			<condcompareto>INTERNAL</condcompareto>
+			<condexpr>%BUILD_TYPE%</condexpr>
+			<indent type='3'>1</indent>
+			<name>Save Failed Build Log with BuildOutput directory</name>
+			<outputfrom type='3'>1</outputfrom>
+		</step></steps>
+	<macros>
+		<macro name='1.0.1.1800'>
+			<value>0.1.1800</value>
+		</macro>
+		<macro name='BRAND_INI'>
+			<description>This file keeps track of all Branded releases</description>
+			<value>%WORKING_DIRECTORY%\WIP\src\Branding\brand.ini</value>
+		</macro>
+		<macro name='BRAND_INI_VNEXT'>
+			<description>This file keeps track of all Branded releases</description>
+			<value>%WORKING_DIRECTORY%\Deployment\Client\Branding\brand.ini</value>
+		</macro>
+		<macro name='BRAND_LOOP_COUNT'>
+			<description>Allows iterations through the ini file</description>
+			<value>0</value>
+		</macro>
+		<macro name='BRAND_LOOP_UBOUND'>
+			<description>Number of brands found in the ini files</description>
+			<value>0</value>
+		</macro>
+		<macro name='BRAND_NAME'>
+			<description>Brand name found in the ini file</description>
+			<value>0</value>
+		</macro>
+		<macro name='BUILD_DEPENDENCIES'>
+			<value>D:\Datacastle\Build\BuildDependencies</value>
+		</macro>
+		<macro name='BUILD_DEPLOYMENTCONFIG'>
+			<value>FremontBob.Config</value>
+		</macro>
+		<macro name='BUILD_DIRECTORY'>
+			<value>%WORKING_DIRECTORY%\Build</value>
+		</macro>
+		<macro name='BUILD_LOGS'>
+			<description>Location to keep copies of old buildlogs in</description>
+			<value>buildlogs</value>
+		</macro>
+		<macro name='BUILD_TYPE'>
+		</macro>
+		<macro name='BUILD_WORKING'>
+			<value>%PROJDIR%\util</value>
+		</macro>
+		<macro name='BUILDOUTPUT_BASE'>
+			<value>%WORKING_DIRECTORY%\BuildOutput</value>
+		</macro>
+		<macro name='BUILDOUTPUT_PRIVATE'>
+			<value>%BUILDOUTPUT_BASE%\Private</value>
+		</macro>
+		<macro name='BUILDOUTPUT_PUBLIC'>
+			<value>%BUILDOUTPUT_BASE%\Public</value>
+		</macro>
+		<macro name='COMPANY_NAME'>
+			<value>Carbonite</value>
+		</macro>
+		<macro name='COPYRIGHT'>
+			<value>Copyright © 2005-2019</value>
+		</macro>
+		<macro name='DB_PASSWORD'>
+			<value>Mon0r4iL</value>
+		</macro>
+		<macro name='DB_SERVER'>
+			<value>APP</value>
+		</macro>
+		<macro name='DB_USERNAME'>
+			<value>dba</value>
+		</macro>
+		<macro name='DCDB'>
+			<description>Name of the database to use for install</description>
+			<value>DCTest</value>
+		</macro>
+		<macro name='DCPASSWD'>
+			<value>1234567890</value>
+		</macro>
+		<macro name='DCUSER'>
+			<value>DEVTEST\DCIIS</value>
+		</macro>
+		<macro name='DEPLOY'>
+			<description>Used to kick off "Deploy Vault to test environment (Nightly only) "</description>
+			<value>false</value>
+		</macro>
+		<macro name='DEPLOY_CONFIG'>
+			<description><![CDATA[Deployment Config required for deployment of the vault
+]]></description>
+			<value>FremontBOB</value>
+		</macro>
+		<macro name='DEPLOY_DIR'>
+			<description>NOT EVERYTHING USES THIS YET! The directory to deploy the applications to (on the server)</description>
+			<value>c:\datacastle</value>
+		</macro>
+		<macro name='DEPLOY_INSTALL_ROOT'>
+			<value>D:\Datacastle\DEPLOYMENT\</value>
+		</macro>
+		<macro name='DEPLOY_PASSWORD'>
+			<description>Password for the DEPLOY_USER account</description>
+			<value>DcBUil4</value>
+		</macro>
+		<macro name='DEPLOY_SERVER'>
+			<description>Name of the server to deploy</description>
+			<value>WEB</value>
+		</macro>
+		<macro name='DEPLOY_USER'>
+			<description>Administrator level account on deploy machine, required for deploy</description>
+			<value>DCBUILD</value>
+		</macro>
+		<macro name='DNGuardFolder'>
+			<value>C:\Program Files (x86)\DNGuard EnterpriseV380</value>
+		</macro>
+		<macro name='DOMAIN_NAME'>
+			<value>devtest.local</value>
+		</macro>
+		<macro name='DOTFUSCATOR_FOLDER'>
+			<value>C:\Program Files (x86)\PreEmptive Solutions\Dotfuscator Professional Edition 4.33.0</value>
+		</macro>
+		<macro name='DOTFUSCATOR_VAULT_OBFUSCATE_INI'>
+			<value>%WORKING_DIRECTORY%\Deployment\Server\VaultMSIProductionTemplateConfig\DotfuscatorObfuscateSettings.ini</value>
+		</macro>
+		<macro name='FILE_EXISTS'>
+			<value>1</value>
+		</macro>
+		<macro name='FREE_SPACE_ALERT'>
+			<value>0</value>
+		</macro>
+		<macro name='FREE_SPACE_GB'>
+			<value>91.5</value>
+		</macro>
+		<macro name='INSTALLER_BRAND_CORP_NAME_DEFAULT'>
+			<value>Carbonite Corporation</value>
+		</macro>
+		<macro name='INSTALLER_BRAND_INFO_URL_DEFAULT'>
+			<value>www.carbonite.com</value>
+		</macro>
+		<macro name='INSTALLER_BRAND_NAME_DEFAULT'>
+			<value>Carbonite</value>
+		</macro>
+		<macro name='INSTALLER_BRAND_SUPPORT_URL_DEFAULT'>
+			<value>https://support.carbonite.com/endpoint</value>
+		</macro>
+		<macro name='INSTALLER_BRAND_UPDATE_URL_DEFAULT'>
+			<value>https://support.carbonite.com/endpoint</value>
+		</macro>
+		<macro name='INSTALLER_MANUFACTURER'>
+			<value>Carbonite Corporation</value>
+		</macro>
+		<macro name='INSTALLER_PRODUCT_CODE'>
+			<value>{59560D4E-2CEF-446B-A070-B355B1332C99}</value>
+		</macro>
+		<macro name='INSTALLER_PRODUCTNAME'>
+			<value>Carbonite</value>
+		</macro>
+		<macro name='INSTALLER_REGISTRY'>
+			<value>Software\\Datacastle</value>
+		</macro>
+		<macro name='INSTALLER_REVISION_CODE'>
+			<value>{5DDC5742-E0A3-4D24-B0B8-82E4D489957B}</value>
+		</macro>
+		<macro name='INSTALLER_UPGRADECODE'>
+			<value>{DFF9D5AC-C4B0-47CA-B99F-F1BF06014751}</value>
+		</macro>
+		<macro name='INTERNAL'>
+			<value>FALSE</value>
+		</macro>
+		<macro name='LOGFILE'>
+			<value>%PROJDIR%\%PROJROOT%.log</value>
+		</macro>
+		<macro name='MACBUILD'>
+			<value>172.30.19.95</value>
+		</macro>
+		<macro name='MAIL_SERVER'>
+			<description>was mx1.123together.com</description>
+			<value>datacastlecorp-com.mail.eo.outlook.com</value>
+		</macro>
+		<macro name='MAPDIR'>
+			<description>Stores Xenocode's mapping file for each build</description>
+			<value>%WORKING_DIRECTORY%\buildMaps</value>
+		</macro>
+		<macro name='MSI_PRODUCTVERSION'>
+			<value>3.2.4047</value>
+		</macro>
+		<macro name='PRODUCT_CODE'>
+			<value>{6F683814-7AA0-4456-92BA-DF74FA0CE749}</value>
+		</macro>
+		<macro name='PRODUCT_NAME'>
+			<value>Carbonite</value>
+		</macro>
+		<macro name='PROGFILES'>
+			<value>C:\Program Files (x86)</value>
+		</macro>
+		<macro name='QuickCache_OBFUSCATE_INI'>
+			<value>%WORKING_DIRECTORY%\Deployment\Server\QuickCacheProductionTemplateConfig\DNGuardObfuscateSettings.ini</value>
+		</macro>
+		<macro name='RELEASE_VERSION_INI'>
+			<value>%PROJDIR%\version.ini</value>
+		</macro>
+		<macro name='ResetServer_OBFUSCATE_INI'>
+			<value>%WORKING_DIRECTORY%\Deployment\Server\ResetServerProductionTemplateConfig\DNGuardObfuscateSettings.ini</value>
+		</macro>
+		<macro name='REVISION_CODE'>
+			<value>{C306637E-32C0-4728-9938-149A25CD2D24}</value>
+		</macro>
+		<macro name='RUN_ATF_TESTS'>
+			<description>Set this to run for ATF tests</description>
+			<value>FALSE</value>
+		</macro>
+		<macro name='RUN_AUTOMATED_TESTS'>
+			<description>Used to Run Automated Tests (Nightly)</description>
+			<value>false</value>
+		</macro>
+		<macro name='RUN_UNIT_TESTS'>
+			<description>Used to Run Unit Tests</description>
+			<value>true</value>
+		</macro>
+		<macro name='RUN_UNIT_TESTS_OBFUSCATED'>
+			<description>Used to Run Obfuscated Unit Tests</description>
+			<value>false</value>
+		</macro>
+		<macro name='SEND_MAIL'>
+			<value>FALSE</value>
+		</macro>
+		<macro name='SETUP_NAME'>
+			<value>D:\Datacastle\build\Master\DeploymentFiles\DC-2.0.3.2815-Debug.exe</value>
+		</macro>
+		<macro name='SIGN_DIR'>
+			<value>%PROJDIR%</value>
+		</macro>
+		<macro name='STRONG_NAME_KEY'>
+			<value>\\..\\..\\..\\Datacastle\\StrongName\\DCStrongNameKey.snk</value>
+		</macro>
+		<macro name='TEMP'>
+			<envvar type='11'>-1</envvar>
+			<value>%WORKING_DIRECTORY%\TEMP</value>
+		</macro>
+		<macro name='TEST_TYPE'>
+			<value>MINIMUM</value>
+		</macro>
+		<macro name='TF_BRANCH'>
+			<description>Name of TFS Branch the code resides (Default Master)</description>
+			<value>Main</value>
+		</macro>
+		<macro name='TF_PROJECT'>
+			<description>Name of TFS Project the code resides</description>
+			<value>Datacastle</value>
+		</macro>
+		<macro name='TF_SERVER'>
+			<description>Name of Team Foundation Server</description>
+			<value>Mocha</value>
+		</macro>
+		<macro name='TIMER_DATA'>
+			<value>%WORKING_DIRECTORY%\build_times.csv</value>
+		</macro>
+		<macro name='TMP'>
+			<envvar type='11'>-1</envvar>
+			<value>%TEMP%</value>
+		</macro>
+		<macro name='tmp_ChangeSet'>
+			<description><![CDATA[e.g.
+Backup Performance Test;joed]]></description>
+			<value>change set name goes here;user-that-submitted-changset</value>
+		</macro>
+		<macro name='UNIT_TESTS_FAILED'>
+			<value>false</value>
+		</macro>
+		<macro name='UPDATER_GUID'>
+			<value>1021BE14-8D7F-47BC-ABD8-0F0A2317FDB7</value>
+		</macro>
+		<macro name='UPDATER_GUID_MASTER'>
+			<value>599EBC47-2D62-4906-8F24-93B023B97E0C</value>
+		</macro>
+		<macro name='UpdateZipSizeMB'>
+			<value>13.16</value>
+		</macro>
+		<macro name='WEB_NAME'>
+			<value>DCTEST</value>
+		</macro>
+		<macro name='WORKING_DIRECTORY'>
+			<value>%PROJDIR%\..</value>
+		</macro></macros>
+	<script language='VBScript'><![CDATA[Option Explicit
+
+'-------------------------------------------------------------------------------
+' Returns a list of the files (not the folders!) under the specified folder
+'-------------------------------------------------------------------------------
+Public Function GetFilesRecursively(directory, files())
+    ReDim files(0) 'Empty the contents of the current files array
+    GetFilesRecursively = GetFilesAndFoldersRecursively(directory, files, 0, True)
+End Function
+
+'-------------------------------------------------------------------------------
+' Returns the FileSystemObject GetFileName() for the given filename
+' Note: Used to clean & verify filename
+'-------------------------------------------------------------------------------
+Public Function GetFileName(filename)
+    Dim fs
+    Set fs = CreateObject("Scripting.FileSystemObject")
+	GetFileName = fs.GetFileName(filename)
+End Function
+
+'-------------------------------------------------------------------------------
+' Returns true is the specified folder exists
+'-------------------------------------------------------------------------------
+Public Function DoesFolderExist(folder)
+    Dim fs
+    Set fs = CreateObject("Scripting.FileSystemObject")
+    DoesFolderExist = fs.FolderExists(folder)
+End Function
+
+'-------------------------------------------------------------------------------
+' Recursively retrieves a list of all Files and Folders
+'-------------------------------------------------------------------------------
+Public Function GetFilesAndFoldersRecursively(rootFolder, fileList(), numberFiles, filesOnly)
+
+    Dim fso, folder, folders
+    Dim files, file, subfolder
+
+    Set fso = CreateObject("Scripting.FileSystemObject")
+
+    If Right(rootFolder, 1) <> "\" Then
+        rootFolder = rootFolder & "\"
+    End If
+
+    If Not DoesFolderExist(rootFolder) Then
+        GetFilesAndFoldersRecursively = -1
+        Exit Function
+    End If
+
+    Set folder = fso.GetFolder(rootFolder)
+
+    'Get the list of files in the folder
+    Set files = folder.files
+    For Each file In files
+        ReDim Preserve fileList(numberFiles)
+        fileList(numberFiles) = rootFolder & file.Name 'add the file to the array
+        numberFiles = numberFiles + 1
+    Next
+
+    'Get the folder's subfolders
+    Set folders = folder.SubFolders
+    For Each subfolder In folders
+        If Not filesOnly Then
+            ReDim Preserve fileList(numberFiles)
+            fileList(numberFiles) = rootFolder & subfolder.Name & "\" 'add the file to the array
+            numberFiles = numberFiles + 1
+        End If
+        GetFilesAndFoldersRecursively (rootFolder & subfolder.Name), fileList, numberFiles, filesOnly
+    Next
+
+    GetFilesAndFoldersRecursively = numberFiles
+End Function
+
+'----------------------------------------------------------------------------------------------------
+' Surrounds a given file name with quotation marks
+'----------------------------------------------------------------------------------------------------
+Public Function QuoteFileName(filename)
+	QuoteFileName = """" & filename & """"
+End Function
+
+'----------------------------------------------------------------------------------------------------
+' Create all levels of specificed directory path
+'----------------------------------------------------------------------------------------------------
+Public Sub CreatePath(path)
+	Dim folders, tempPath, index, startIndex
+	'Strip off trailing backslash
+	If Right(path, 1) = "\" Then
+		path = Left(path, len(path) - 1)
+	End If
+	'Split path into tokens for each drive/share and folder
+	folders = Split(path, "\", -1, vbTextCompare)
+	'Handle UNC paths differently to local ones.
+	If Left(path, 2) = "\\" Then
+		'If path is UNC, then begin creation following the server and share tokens.
+		startIndex = LBOUND(folders) + 4
+		If startIndex > UBOUND(folders) Then
+			'Path does not specify any folders beneath the UNC share level.
+			Exit Sub
+		End If
+		tempPath = "\\" & folders(LBOUND(folders) + 2) & "\" & folders(LBOUND(folders) + 3) & "\"
+	Else
+		'If path is local, then begin creation following the drive designator.
+		startIndex = LBOUND(folders) + 1
+		If startIndex > UBOUND(folders) Then
+			'Path does not specify any folders beneath the drive level.
+			Exit Sub
+		End If
+		tempPath = folders(LBOUND(folders)) & "\"
+	End If
+	'Loop through remaining tokens (all folders) and ensure they exist.
+	For index = startIndex to UBOUND(folders)
+		tempPath = vbld_FSO.BuildPath(tempPath, folders(index))
+		If Not (vbld_FSO.FolderExists(tempPath)) Then
+			Call vbld_FSO.CreateFolder(tempPath)
+			Builder.LogMessage("Created Folder: " & tempPath)
+		End If
+	Next
+End Sub
+
+'----------------------------------------------------------------------------------------------------
+'
+'----------------------------------------------------------------------------------------------------
+Public Sub SaveProjectStatus()
+	' Ensure that the file is not read-only
+	Call vbld_MakeFileWriteable(Project.Name)
+	' The build failed; Save the project with status so it will continue from the failure step during the next build
+	Call Project.Save(Project.Name, vbldSaveStatusInclude)
+	' Log a message to indicate that the save happened
+	Call Builder.LogMessage("Failed Build: Project saved with status")
+End Sub
+
+'----------------------------------------------------------------------------------------------------
+'
+'----------------------------------------------------------------------------------------------------
+Public Sub ClearProjectStatus()
+	' Ensure that the file is not read-only
+	Call vbld_MakeFileWriteable(Project.Name)
+	' The build succeeded; Save the project without status so it will begin from the start during the next build
+	Call Project.Save(Project.Name, vbldSaveStatusExclude)
+	' Log a message to indicate that the save happened
+	Call Builder.LogMessage("Good Build: Project status is clean")
+
+End Sub
+
+'----------------------------------------------------------------------------------------------------
+'
+'----------------------------------------------------------------------------------------------------
+Public Function DoesProcessIDExist(ProcessID, ServerName)
+    Dim wmi, processlist, process
+    Set wmi = GetObject("winmgmts:{impersonationLevel=impersonate}!\\" & ServerName & "\root\cimv2")
+    Set processlist = wmi.ExecQuery("Select * from Win32_Process where ProcessId = '" & ProcessID & "'")
+    For Each process In processlist
+        DoesProcessIDExist = true
+        Exit Function
+    Next
+    DoesProcessIDExist = false
+End Function
+
+'----------------------------------------------------------------------------------------------------
+'
+'----------------------------------------------------------------------------------------------------
+Public Function CreateProcess(AppExe, ServerName, WaitForCompletion)
+	Dim wmi, objProcess, retCode, processID
+	Set wmi = GetObject("winmgmts:{impersonationLevel=impersonate}!\\" & ServerName & "\root\cimv2")
+	Set objProcess = wmi.Get("Win32_Process")
+	retCode = objProcess.Create(AppExe, Null, Null, ProcessID)
+	If retCode <> 0 Then 'This is just the return code from WMI, not the process return code
+		CreateProcess = false
+		Exit Function
+	End If
+	If WaitForCompletion Then
+		Do While DoesProcessIDExist(processID, ServerName)
+			wscript.Sleep 1000
+		Loop
+	End If
+	CreateProcess = true
+End Function]]></script>
+</project>
