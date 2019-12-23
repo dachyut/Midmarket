@@ -103,7 +103,7 @@ if ($BuildLevel -In "NIGHTLY","RC" -And -Not $SkipComponents.Contains("SKIP_CLIE
     $OptionalArgs += "BuildAllClientBrands=true"
 }
 
-$working_directory= "D:\LocalBuild\Midmarket" 
+$working_directory= $ENV:WORKSPACE 
 
 $cmd = "C:\program files\VisBuildPro9\visbuildcmd.exe"
 $buildFile = "{0}\build\datacastle.bld" -f $working_directory
