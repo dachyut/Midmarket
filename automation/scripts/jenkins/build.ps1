@@ -110,6 +110,23 @@ $buildFile = "{0}\build\datacastle.bld" -f $working_directory
 $logFile = """{0}\Build.log""" -f $working_directory
 
 
+$OptionalArgs += "DoNotObfusateVault=true"
+$OptionalArgs += "DoNotObfuscateQuickCache=true"
+$OptionalArgs += "DoNotObfuscateTools=true"
+$OptionalArgs += "DoNotObfuscateResetServer=true"
+$OptionalArgs += "SkipClientObfuscation=true"
+$OptionalArgs += "DoNotIncludeLDAPSync=true"
+$OptionalArgs += "DoNotIncludeQuickCache=true"
+$OptionalArgs += "DoNotIncludeTools=true"
+$OptionalArgs += "DoNotIncludeSigning=true"
+$OptionalArgs += "DoNotIncludeSQLExpress=true"
+$OptionalArgs += "DoNotIncludeMacClient=true"
+$OptionalArgs += "DoNotIncludeResetServer=true"
+$OptionalArgs += "DoNotIncludePassphraseClient=true"
+$OptionalArgs += "DoNotIncludeAzure=true"
+$OptionalArgs += "DoNotIncludePrecompiledHelp=true"
+$OptionalArgs += "DoNotBuildClients=true"
+
 Write-Host $cmd $buildFile WORKING_DIRECTORY=$working_directory MACBUILD=$MacBuild MACBUILD_USER=$MacBuildUsername MACBUILD_PWD=$MacBuildPassword BUILD_TYPE=$BuildType TFSBUILDTYPE=$TFSBuildType OUTPUTSUBDIR=$BuildBrandIndex RUN_UNIT_TESTS_OBFUSCATED=false RUN_UNIT_TESTS=true TEST_TYPE=Minimum BUILD_BRAND_INDEX=$BuildBrandIndex @OptionalArgs /logfile $logFile /nologo /nooutput
 
 & $cmd $buildFile WORKING_DIRECTORY=$working_directory MACBUILD=$MacBuild MACBUILD_USER=$MacBuildUsername MACBUILD_PWD=$MacBuildPassword BUILD_TYPE=$BuildType TFSBUILDTYPE=$TFSBuildType OUTPUTSUBDIR=$BuildBrandIndex RUN_UNIT_TESTS_OBFUSCATED=false RUN_UNIT_TESTS=true TEST_TYPE=Minimum BUILD_BRAND_INDEX=$BuildBrandIndex @OptionalArgs /logfile $logFile /nologo /nooutput
